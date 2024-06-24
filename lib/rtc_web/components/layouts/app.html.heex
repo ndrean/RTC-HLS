@@ -1,0 +1,45 @@
+<header class="px-4 sm:px-6 lg:px-8">
+  <div class="flex items-center justify-between border-b border-zinc-100 py-3 text-sm">
+    <div class="flex items-center gap-4">
+      <a href="/">
+        <img src={~p"/images/logo.svg"} width="36" />
+      </a>
+      <p class="bg-brand/5 text-brand rounded-full px-2 font-medium leading-6">
+        Ex: <%= System.version() %>
+      </p>
+      <p class="bg-brand/5 text-brand rounded-full px-2 font-medium leading-6">
+        Phx: <%= Application.spec(:phoenix, :vsn) %>
+      </p>
+      <p class="bg-brand/5 text-brand rounded-full px-2 font-medium leading-6">
+        Vix: <%= inspect(Map.get(Image.vips_version() |> elem(1), :major)) %>: <%= inspect(
+          Map.get(Image.vips_version() |> elem(1), :minor)
+        ) %>
+      </p>
+    </div>
+    <div class="flex items-center gap-4 font-semibold leading-6 text-zinc-900">
+      <span class="bg-blue-100 text-blue-800 text-sm font-medium me-2 px-2.5 py-0.5 rounded dark:bg-blue-900 dark:text-blue-300">
+        <a href="https://github.com/ndrean/RTC/tree/main" target="_blank">
+          GitHub &rarr; RTC
+        </a>
+      </span>
+      <span class="bg-green-100 text-green-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded dark:bg-green-900 dark:text-green-300">
+        <a href="https://hexdocs.pm/phoenix/overview.html" target="_blank">
+          Phoenix docs <span aria-hidden="true"></span>
+        </a>
+      </span>
+      <span class="bg-blue-100 text-blue-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded dark:bg-blue-900 dark:text-blue-300">
+        <a href="https://hexdocs.pm/phoenix_live_view/Phoenix.LiveView.html" target="_blank">
+          LiveView docs <span aria-hidden="true"></span>
+        </a>
+      </span>
+
+      <img width="30px" alt="line-status" id="online" />
+    </div>
+  </div>
+</header>
+<main class="px-4 py-20 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-2xl">
+    <.flash_group flash={@flash} />
+    <%= @inner_content %>
+  </div>
+</main>
