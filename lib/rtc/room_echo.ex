@@ -67,14 +67,15 @@ defmodule Rtc.RoomEcho do
   @impl true
   # caoont start a GenServer from a GenServer!
   def handle_continue(:init_streamer, state) do
-    {:ok, pid} =
-      DynamicSupervisor.start_child(
-        Rtc.DynSup,
-        {Rtc.FFmpegStreamer, [type: "echo", user_id: state.user_id]}
-      )
+    # {:ok, pid} =
+    #   DynamicSupervisor.start_child(
+    #     Rtc.DynSup,
+    #     {Rtc.FFmpegStreamer, [type: "echo", user_id: state.user_id]}
+    #   )
 
-    Process.link(pid)
-    {:noreply, %{state | streamer: pid}}
+    # Process.link(pid)
+    # {:noreply, %{state | streamer: pid}}
+    {:noreply, state}
   end
 
   @impl true

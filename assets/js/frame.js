@@ -12,8 +12,11 @@ const frame = {
     clearInterval(this.intId);
     clearInterval(this.intCam);
     this.video = null;
-    this.localStream.getTracks().forEach((track) => track.stop());
-    this.localStream = null;
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((track) => track.stop());
+      this.localStream = null;
+    }
+
     if (this.channel) {
       this.channel.leave();
     }
@@ -49,7 +52,7 @@ const frame = {
     const stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
     this.video.srcObject = stream;
     this.localStream = stream;
-    const fps = 2;
+    const fps = 1;
     this.intId = setInterval(captureFrame, 1000 / fps, this.video);
 
     // async function captureFrame(video) {
@@ -79,7 +82,10 @@ const frame = {
       const { promise, resolve } = Promise.withResolvers();
       canvas.toBlob(resolve, "image/webp", 0.9);
       const blob = await promise;
+      // await sendToController(blob);
+      
       checkCapture(blob);
+
       const arrayBuffer = await blob.arrayBuffer();
 
       const encodedB64 = arrayBufferToB64(arrayBuffer);
@@ -87,14 +93,32 @@ const frame = {
       // LiveView -> needs "handle_event("frame", ...) in the LiveView
       // _this.pushEvent("frame", { data: encodedB64 });
       _this.channel.push("frame", encodedB64);
-
+      
       document.querySelector("#stats").textContent = `Image: ${(
         encodedB64.length / 1024
       ).toFixed(1)} kB, browser process: ${(performance.now() - t0).toFixed(
         0
       )} ms`;
+      
     }
 
+    /*
+    async function sendToController(blob){
+      const formData = new FormData();
+          formData.append(
+            "file",
+            new File([blob], "chunk.webp", { type: "image/webp" })
+          );
+          formData.append("type", "frame");
+
+          let resp = await fetch("/api/live-upload", {
+            method: "POST",
+            body: formData,
+          });
+          await resp.text();
+        }
+        */
+    
     // convert the ArrayBuffer to a b64 encoded string by chunks (btoa limitation to 16k characters)
     function arrayBufferToB64(arrayBuffer) {
       const bytes = new Uint8Array(arrayBuffer);

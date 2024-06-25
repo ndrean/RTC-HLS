@@ -20,24 +20,34 @@ defmodule Rtc.FFmpegStreamer do
     GenServer.call(via(type, user_id), :get_data)
   end
 
-  def process_hls_chunk(%{type: type, user_id: user_id, chunk: chunk}) do
-    GenServer.call(via(type, user_id), {:process_hls_chunk, chunk})
+  # def process_hls_path(%{type: type, user_id: user_id, file_path: path}) do
+  #   GenServer.call(via(type, user_id), {:process_hls_path, path})
+  # end
+
+  def enqueue_path(%{type: type, user_id: user_id, path: path}) do
+    GenServer.call(via(type, user_id), {:enqueue_path, type, path})
   end
+
+  # def process_frame_path(%{type: type, user_id: user_id, frame_path: frame_path}) do
+  #   GenServer.call(via(type, user_id), {:process_frame_path, frame_path})
+  # end
 
   def pid(%{type: type, user_id: user_id}) do
     GenServer.call(via(type, user_id), :pid)
   end
 
   def init(args) do
-    ffmpeg = Application.fetch_env!(:rtc, :ffmpeg)
+    IO.puts("FFmpegStreamer **************")
+    ffmpeg_os_path = Application.fetch_env!(:rtc, :ffmpeg) |> dbg()
     hls_dir = Application.fetch_env!(:rtc, :hls)[:hls_dir]
     dash_dir = Application.fetch_env!(:rtc, :hls)[:dash_dir]
 
-    playlist = Path.join(hls_dir, "stream.m3u8")
-    segment = Path.join(hls_dir, "segment_%03d.ts")
+    playlist_path = Path.join(hls_dir, "stream.m3u8")
+    segment_path = Path.join(hls_dir, "segment_%03d.ts")
 
     hls_cmd =
       [
+        ffmpeg_os_path,
         # Input from stdin (pipe)
         ["-i", "pipe:0"],
         # sets the input frame rate to 20 frames per second.
@@ -54,9 +64,10 @@ defmodule Rtc.FFmpegStreamer do
         # Type of playlist (live for continuous update)
         ["-hls_playlist_type", "event"],
         # Segment file naming pattern
-        ["-hls_segment_filename", segment],
+        ["-hls_segment_filename", segment_path],
+        ["-loglevel", "debug"],
         # Playlist file
-        playlist
+        playlist_path
       ]
       |> List.flatten()
 
@@ -66,6 +77,7 @@ defmodule Rtc.FFmpegStreamer do
 
     dash_cmd =
       [
+        ffmpeg_os_path,
         # Input from stdin
         ["-i", "-"],
         # Set the input frame rate to 20 fps
@@ -94,6 +106,8 @@ defmodule Rtc.FFmpegStreamer do
 
     echo_cmd =
       [
+        ffmpeg_os_path,
+        ["-loglevel", "debug"],
         # Input from stdin
         ["-i", "-"],
         # Capture only the first frame
@@ -109,55 +123,34 @@ defmodule Rtc.FFmpegStreamer do
       ]
       |> List.flatten()
 
+    _evision_cmd =
+      ~w(#{ffmpeg_os_path} -i - -f image2pipe -framerate 25 -c:v libx264 -pix_fmt yuv420p output.mp4)
+
     state =
       cond do
         args[:type] in ["hls", "face"] ->
-          %{
-            porcelain_hls: Porcelain.spawn(ffmpeg, hls_cmd, in: :receive, out: :stream),
-            cmd: hls_cmd,
-            path: hls_dir
-          }
+          {:ok, ffmpeg_pid} = ExCmd.Process.start_link(hls_cmd) |> dbg()
+
+          # porcelain: Porcelain.spawn(ffmpeg_os_path, hls_cmd, in: :receive, out: :stream),
+          %{ffmpeg_pid: ffmpeg_pid}
+
+        args[:type] == "evision" ->
+          IO.puts("STARTED EVISION FFMPEG-------")
+          %{}
+
+        # %{porcelain: Porcelain.spawn(ffmpeg_os_path, evision_cmd, in: :receive, out: :stream)}
 
         args[:type] == "dash" ->
-          %{
-            porcelain_dash: Porcelain.spawn(ffmpeg, dash_cmd, in: :receive, out: :stream),
-            cmd: dash_cmd,
-            path: dash_dir
-          }
+          {:ok, ffmpeg_pid} = ExCmd.Process.start_link(dash_cmd) |> dbg()
 
-        args[:type] == "echo" ->
-          %{
-            porcelain_echo: Porcelain.spawn(ffmpeg, echo_cmd, in: :receive, out: :stream),
-            cmd: echo_cmd
-          }
+          # porcelain: Porcelain.spawn(ffmpeg_os_path, dash_cmd, in: :receive, out: :stream)
+          %{ffmpeg_pid: ffmpeg_pid}
+
+        args[:type] in ["frame", "echo"] ->
+          # porcelain: Porcelain.spawn(ffmpeg_os_path, echo_cmd, in: :receive, out: :stream),
+          %{cmd: echo_cmd}
       end
-
-    # state =
-    #   case args[:type] do
-    #     "hls" ->
-    #       %{
-    #         porcelain_hls: Porcelain.spawn(ffmpeg, hls_cmd, in: :receive, out: :stream),
-    #         # porcelain_hls: nil,
-    #         cmd: echo_cmd,
-    #         path: hls_dir
-    #       }
-
-    #     "dash" ->
-    #       %{
-    #         porcelain_dash: Porcelain.spawn(ffmpeg, dash_cmd, in: :receive, out: :stream),
-    #         cmd: dash_cmd,
-    #         path: dash_dir
-    #       }
-
-    #     "echo" ->
-    #       %{
-    #         porcelain_echo: Porcelain.spawn(ffmpeg, echo_cmd, in: :receive, out: :stream),
-    #         cmd: echo_cmd
-    #       }
-    #   end
-
-    # this is for test echo only to get the first frame
-    state = Map.merge(state, %{type: args[:type], ffmpeg: ffmpeg, queue: :queue.new()})
+      |> Map.merge(%{type: args[:type], queue: :queue.new()})
 
     {:ok, state}
   end
@@ -171,34 +164,30 @@ defmodule Rtc.FFmpegStreamer do
     {:reply, self(), state}
   end
 
-  # for HLS---------------------
-  def handle_call({:process_hls_chunk, chunk}, _, state) do
-    send(self(), {"hls", chunk})
-    {:reply, :processed, state}
+  def handle_call({:enqueue_path, type, path}, _, state) do
+    send(self(), {type, path})
+    {:reply, :enqueued, state}
   end
 
-  def handle_info({"hls", data}, state) do
-    new_queue = :queue.in(data, state.queue)
-    send(self(), :process_hls_queue)
+  def handle_info({"frame", frame}, state) do
+    new_queue = :queue.in(frame, state.queue)
+    send(self(), :process_frame_queue)
     {:noreply, %{state | queue: new_queue}}
   end
 
-  def handle_info(:process_hls_queue, state) do
+  def handle_info(:process_frame_queue, state) do
     case :queue.out(state.queue) do
-      {{:value, data}, new_queue} ->
-        Porcelain.Process.send_input(state.porcelain_hls, data)
+      {{:value, frame}, new_queue} ->
+        stream =
+          ExCmd.stream!(
+            ~w(#{state.ffmpeg_path} -i pipe:0 -frames:v 1 -f image2 -vcodec mjpeg -y pipe:1),
+            input: File.stream!(frame, 65_336)
+          )
+          |> Enum.into("")
 
-        # {:ok, tmp_file} = Plug.Upload.random_file("jpeg") |> dbg()
+        Rtc.Processor.process_frame(stream, "priv/static/hls/test.jpg")
 
-        # ExCmd.stream!(~w(#{state.ffmpeg} #{state.cmd}), input: File.stream!(data))
-        # |> Stream.into(File.stream!(tmp_file))
-        # |> Stream.run()
-
-        # %Plug.Upload{path: path} = data
-        # ExCmd.stream!(~w(#{state.ffmpeg} #{state.hls_cmd}),
-        #   input: File.stream!(path)
-        # )
-
+        send(self(), :process_frame_queue)
         {:noreply, %{state | queue: new_queue}}
 
       {:empty, _} ->
@@ -206,15 +195,58 @@ defmodule Rtc.FFmpegStreamer do
     end
   end
 
-  def handle_info({:stop, type}, state) when type in ["hls", "face"] do
-    Porcelain.Process.signal(state.porcelain_hls, :kill)
-    Porcelain.Process.stop(state.porcelain_hls)
+  # face----------------
+  def handle_info({"face", path}, state) do
+    new_queue = :queue.in(path, state.queue)
+    send(self(), :process_face_queue)
+    {:noreply, %{state | queue: new_queue}}
+  end
 
+  def handle_info(:process_face_queue, state) do
+    case :queue.out(state.queue) do
+      {{:value, path}, new_queue} ->
+        ExCmd.Process.write(state.ffmpeg_pid, File.read!(path))
+        #   Porcelain.Process.send_input(state.porcelain, File.read!(path))
+        send(self(), :process_face_queue)
+        {:noreply, %{state | queue: new_queue}}
+
+      {:empty, _} ->
+        {:noreply, state}
+    end
+  end
+
+  # for HLS---------------------
+  def handle_info({"hls", path}, state) do
+    new_queue = :queue.in(path, state.queue)
+    send(self(), :process_hls_queue)
+    {:noreply, %{state | queue: new_queue}}
+  end
+
+  def handle_info(:process_hls_queue, state) do
+    case :queue.out(state.queue) do
+      {{:value, path}, new_queue} ->
+        data = File.read!(path)
+        ExCmd.Process.write(state.ffmpeg_pid, data)
+        # Porcelain.Process.send_input(state.porcelain, data)
+
+        send(self(), :process_hls_queue)
+        {:noreply, %{state | queue: new_queue}}
+
+      {:empty, _} ->
+        IO.puts("Processed------")
+        {:noreply, state}
+    end
+  end
+
+  def handle_info({:stop, type}, state) when type in ["hls", "face"] do
+    ExCmd.Process.stop(state.ffmpeg_pid)
+
+    # Porcelain.Process.signal(state.porcelain, :kill)
+    # Porcelain.Process.stop(state.porcelain)
     {:stop, :shutdown, state}
   end
 
   # for dash---------------------
-
   def handle_info({"dash", data}, state) do
     new_queue = :queue.in(data, state.queue)
     send(self(), :process_dash_queue)
@@ -224,7 +256,7 @@ defmodule Rtc.FFmpegStreamer do
   def handle_info(:process_dash_queue, state) do
     case :queue.out(state.queue) do
       {{:value, data}, new_queue} ->
-        Porcelain.Process.send_input(state.porcelain_dash, data)
+        Porcelain.Process.send_input(state.porcelain, data)
         {:noreply, %{state | dash_queue: new_queue}}
 
       {:empty, _} ->
@@ -233,17 +265,39 @@ defmodule Rtc.FFmpegStreamer do
   end
 
   def handle_info({:stop, "dash"}, state) do
-    Porcelain.Process.stop(state.porcelain_dash)
+    ExCmd.Process.stop(state.ffmpeg_pid)
     {:stop, :shutdown, state}
   end
 
   # for echo ------
-  def handle_info({"echo", _data, _sender_pid}, state) do
-    # DO SOMETHING ????
-    {:noreply, state}
-  end
+  # def handle_info({"echo", _data, _sender_pid}, state) do
+  #   # DO SOMETHING ????
+  #   {:noreply, state}
+  # end
 
-  def handle_info({:echo, _data, _sender_pid}, state) do
-    {:noreply, state}
-  end
+  # def handle_info({:echo, _data, _sender_pid}, state) do
+  #   {:noreply, state}
+  # end
+
+  # def handle_info(:evision, state) do
+  #   IO.puts("EVISION Process------")
+  #   capture = Evision.VideoCapture.videoCapture(0)
+  #   frame = Evision.VideoCapture.read(capture) |> dbg()
+  #   grey = Evision.cvtColor(frame, Evision.Constant.cv_COLOR_BGR2GRAY())
+
+  #   face_cascade_path =
+  #     Path.join(
+  #       Application.get_env(:rtc, :models)[:haar_cascade],
+  #       "haarcascade_frontalface_default.xml"
+  #     )
+
+  #   face_cascade_model = Evision.CascadeClassifier.cascadeClassifier(face_cascade_path)
+  #   faces = Evision.CascadeClassifier.detectMultiScale(face_cascade_model, grey)
+  #   IO.inspect(faces)
+  #   Enum.reduce(faces, frame, fn {x, y, w, h}, mat ->
+  #     Cv.rectangle(mat, {x, y}, {x + w, y + h}, {0, 0, 255}, thickness: 2)
+  #   end)
+
+  #   {:noreply, state}
+  # end
 end

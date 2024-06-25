@@ -15,10 +15,9 @@ defmodule RtcWeb.Endpoint do
     websocket: [connect_info: [session: @session_options]],
     longpoll: [connect_info: [session: @session_options]]
 
-  socket("/room", RtcWeb.RoomSocket,
+  socket "/room", RtcWeb.RoomSocket,
     websocket: [check_origin: false, connect_info: [:peer_data, session: @session_options]],
     longpoll: false
-  )
 
   socket "/stream", RtcWeb.StreamSocket,
     websocket: [check_origin: false, connect_info: [:peer_data, session: @session_options]],

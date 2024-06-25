@@ -38,7 +38,9 @@ defmodule RtcWeb.RoomLive do
         playlist_ready: false,
         active: nil,
         hls_streamer_pid: nil,
-        face_streamer_pid: nil
+        face_streamer_pid: nil,
+        frame_streamer_pid: nil,
+        evision_streamer_pid: nil
       })
 
     if connected?(socket) do
@@ -53,6 +55,8 @@ defmodule RtcWeb.RoomLive do
 
   @impl true
   def handle_params(%{"ex_room_id" => rid}, _uri, socket) do
+    IO.puts("PARAMS ROOM---------------")
+
     :created =
       Lobby.create_room(
         room_id: rid,
@@ -65,6 +69,8 @@ defmodule RtcWeb.RoomLive do
   end
 
   def handle_params(%{"echo" => echo}, _uri, socket) do
+    IO.puts("PARAMS ECHO-----------------")
+
     :created =
       Lobby.create_room(
         room_id: echo,
@@ -76,10 +82,15 @@ defmodule RtcWeb.RoomLive do
     {:noreply, assign(socket, :live_action, :echo)}
   end
 
-  def handle_params(_p, _uri, socket), do: {:noreply, socket}
+  def handle_params(p, uri, socket) do
+    dbg({p, uri})
+    {:noreply, socket}
+  end
 
   # Callbacks from client -----------------------------
+
   @impl true
+  # event from Room selection to navigate to
   def handle_event("goto", %{"ex_room_id" => rid}, socket) do
     # limit rooms to 2 users: using ExRTC
     exroom = "ex_#{rid}"
@@ -113,7 +124,8 @@ defmodule RtcWeb.RoomLive do
     end
   end
 
-  # set the tab to navigate to
+  # event: JS.push "switch" in "tab_selector"
+  # maybe starts FFmpeg streamer and sets the tab to navigate to
 
   def handle_event("switch", %{"tab" => "live"}, socket) do
     # can't go there is no playlist available
@@ -161,9 +173,27 @@ defmodule RtcWeb.RoomLive do
         {:ok, pid} -> pid
         {:error, {:already_started, pid}} -> pid
       end
-      |> dbg()
 
     {:noreply, assign(socket, tab: "face", face_streamer_pid: face_streamer_pid)}
+  end
+
+  def handle_event("switch", %{"tab" => "evision"}, socket) do
+    evision_streamer_pid =
+      DynamicSupervisor.start_child(
+        Rtc.DynSup,
+        # {FFmpegStreamer, [type: "evision", user_id: socket.assigns.user_id]}
+        {Rtc.ProcessorAgent, [type: "evision", user_id: socket.assigns.user_id]}
+      )
+
+    evision_streamer_pid =
+      case evision_streamer_pid do
+        {:ok, pid} -> pid
+        {:error, {:already_started, pid}} -> pid
+      end
+
+    evision_streamer_pid |> dbg()
+
+    {:noreply, assign(socket, tab: "evision", evision_streamer_pid: evision_streamer_pid)}
   end
 
   def handle_event("switch", %{"tab" => tab}, socket) do
@@ -174,36 +204,33 @@ defmodule RtcWeb.RoomLive do
     {:noreply, socket}
   end
 
-  def handle_event("stop-hls-stream", %{"tab" => "face"}, socket) do
-    %{assigns: %{tab: tab, user_id: user_id, face_streamer_pid: face_streamer_pid}} = socket
+  def handle_event("stop-hls-stream", %{"tab" => "hls"}, socket) do
+    %{assigns: %{tab: tab, hls_streamer_pid: hls_streamer_pid}} = socket
 
-    if face_streamer_pid do
-      IO.puts("ALIVE-------")
+    case hls_streamer_pid do
+      nil ->
+        {:noreply, socket}
 
-      FFmpegStreamer.pid(%{type: tab, user_id: user_id})
-      |> send({:stop, tab})
+      pid ->
+        IO.puts("Stopping-------")
+        send(pid, {:stop, tab})
 
-      {:noreply, push_event(socket, "stop", %{}) |> assign(:face_streamer_pid, nil)}
-    else
-      IO.puts("DEAD------")
-      {:noreply, socket}
+        {:noreply, push_event(socket, "stop", %{}) |> assign(:hls_streamer_pid, nil)}
     end
   end
 
-  def handle_event("stop-hls-stream", %{"tab" => "hls"}, socket) do
-    %{assigns: %{tab: tab, user_id: user_id, hls_streamer_pid: hls_streamer_pid}} = socket
-    IO.puts("STOP-----------")
+  def handle_event("stop-hls-stream", %{"tab" => "face"}, socket) do
+    %{assigns: %{tab: tab, face_streamer_pid: face_streamer_pid}} = socket
 
-    if hls_streamer_pid do
-      IO.puts("ALIVE-------")
+    case face_streamer_pid do
+      nil ->
+        {:noreply, socket}
 
-      FFmpegStreamer.pid(%{type: tab, user_id: user_id})
-      |> send({:stop, tab})
+      pid ->
+        IO.puts("Stopping-------")
+        send(pid, {:stop, tab})
 
-      {:noreply, push_event(socket, "stop", %{}) |> assign(:face_streamer_pid, nil)}
-    else
-      IO.puts("DEAD------")
-      {:noreply, socket}
+        {:noreply, push_event(socket, "stop", %{}) |> assign(:face_streamer_pid, nil)}
     end
   end
 
@@ -215,6 +242,12 @@ defmodule RtcWeb.RoomLive do
     |> send({:stop, socket.assigns.tab})
 
     {:noreply, push_event(socket, "stop", %{}) |> push_patch(to: ~p"/")}
+  end
+
+  def handle_event("start-evision", _, %{assigns: %{evision_streamer_pid: pid}} = socket)
+      when not is_nil(pid) do
+    Rtc.Processor.process_video()
+    {:noreply, socket}
   end
 
   # callbacks from the process -------------------------
@@ -285,6 +318,7 @@ defmodule RtcWeb.RoomLive do
         list={[
           %{tab_id: "#frame-js", live_action: "frame", title: "Frame (JS)"},
           %{tab_id: "#echo", live_action: "echo", title: "Echo (Ex)RTC"},
+          %{tab_id: "#evision", live_action: "evision", title: "Echo (Evision)"},
           %{tab_id: "#ex_form", live_action: "exrtc", title: "Visio-2 (Ex)RTC"},
           %{tab_id: "#web_form", live_action: "webrtc", title: "Visio-3 (Web)RTC"},
           %{tab_id: "#face-api", live_action: "face", title: "Face API"},
@@ -311,6 +345,7 @@ defmodule RtcWeb.RoomLive do
           link_text="HLS Live View"
           inner_text="TODO"
         />
+
         <Navigate.display_tab
           :if={@tab == "frame"}
           action={JS.patch("/frame")}
@@ -322,6 +357,12 @@ defmodule RtcWeb.RoomLive do
           action={JS.navigate("/echo/echo_#{@id}")}
           link_text="Echo Server"
           inner_text="Broadcast yourself via ExRTC. The feed of your webcam is sent via RTC to the Elixir-RTC. The server broadcasts back streams in the other <video> element."
+        />
+        <Navigate.display_tab
+          :if={@tab == "evision"}
+          action={JS.patch("/evision/evision_#{@id}")}
+          link_text="Echo Evision"
+          inner_text="Capture your webcam and run a face recognition. The feed of your webcam is sent via HTTP to the Phoenix server. The server broadcasts back streams in the other <video> element."
         />
 
         <RoomForm.select
@@ -353,6 +394,23 @@ defmodule RtcWeb.RoomLive do
     <section id="room-view" data-user-id={@user_id} data-module="echo" phx-hook="rtc">
       <Header.display
         header="ExWebRTC Echo server"
+        id={@id}
+        pid={inspect(self())}
+        user_id={@user_id}
+        room_id={@room_id}
+      />
+      <Navigate.home />
+      <Videos.play />
+      <canvas id="canvas"></canvas>
+    </section>
+    """
+  end
+
+  def render(assigns) when assigns.live_action == :evision do
+    ~H"""
+    <section id="echo-view" data-user-id={@user_id} data-module="evision" phx-hook="echo_evision">
+      <Header.display
+        header="Echo Evision from server"
         id={@id}
         pid={inspect(self())}
         user_id={@user_id}

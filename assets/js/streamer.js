@@ -3,7 +3,6 @@ import streamSocket from "./streamSocket";
 export const InputHls = {
   localStream: null,
   video: null,
-  intId: null,
   mediaStream: null,
   channel: null,
   readableStream: null,
@@ -117,7 +116,6 @@ export const InputHls = {
 
   destroyed() {
     console.log("destroyed");
-    clearInterval(this.intId);
     if (this.channel) {
       this.channel.leave();
     }
@@ -188,7 +186,6 @@ export const LiveDash = {
 export const InputDash = {
   localStream: null,
   video: null,
-  intId: null,
   mediaStream: null,
 
   async mounted() {
@@ -229,7 +226,6 @@ export const InputDash = {
 
   destroyed() {
     console.log("destroyed");
-    clearInterval(this.intId);
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
     }

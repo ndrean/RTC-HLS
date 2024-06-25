@@ -1,13 +1,58 @@
-defmodule Rtc.SegmentProcessor do
-  alias Evision.{VideoCapture, CascadeClassifier}
+defmodule Rtc.ProcessorAgent do
+  use Agent
+  alias Evision.CascadeClassifier
 
+  @moduledoc """
+  Agent to load and hold the Haar Cascade model for the processor.
+  """
+
+  def start_link(type: type, user_id: user_id) do
+    face_cascade_path =
+      Path.join(
+        Application.get_env(:rtc, :models)[:haar_cascade],
+        "haarcascade_frontalface_default.xml"
+      )
+
+    face_cascade_model = CascadeClassifier.cascadeClassifier(face_cascade_path)
+
+    state = %{type: type, user_id: user_id, face_cascade_model: face_cascade_model}
+    Agent.start_link(fn -> state end, name: __MODULE__)
+  end
+
+  def get_haar_model do
+    Agent.get(__MODULE__, fn state -> state.face_cascade_model end)
+  end
+end
+
+defmodule Rtc.Processor do
   @moduledoc """
   Processes HLS segments, detects faces in 1 out of every 20 frames,
   and adds a rectangle around detected faces.
   """
 
-  defp cascade_path do
-    Application.get_env(:rtc, :models)[:haar_cascade]
+  def process_video do
+    IO.puts("EVISION Process------")
+    capture = Evision.VideoCapture.videoCapture(0)
+    frame = Evision.VideoCapture.read(capture)
+    grey = Evision.cvtColor(frame, Evision.Constant.cv_COLOR_BGR2GRAY())
+    detect_and_redraw(grey)
+  end
+
+  def detect_and_redraw(grey) do
+    face_cascade_model = Rtc.ProcessorAgent.get_haar_model()
+
+    faces = Evision.CascadeClassifier.detectMultiScale(face_cascade_model, grey)
+
+    Enum.reduce(faces, grey, fn {x, y, w, h}, mat ->
+      Evision.rectangle(mat, {x, y}, {x + w, y + h}, {0, 0, 255}, thickness: 2)
+    end)
+  end
+
+  def process_frame(frame_binary, output_path) do
+    # frame_binary
+    # |> Mat.from_binary(frame_binary, Cv.Constant.cv_IMPREAD_COLOR())
+    # |> detect_and_redraw()
+    # |> save_frame(0, output_path)
   end
 
   def process_segment(segment_path, output_path) do
@@ -27,25 +72,6 @@ defmodule Rtc.SegmentProcessor do
       end
       |> save_frame(i, output_path)
     end
-  end
-
-  def detect_and_redraw(frame) do
-    # no colours needed
-    grey_frame = Evision.cvtColor(frame, Evision.Constant.cv_COLOR_BGR2GRAY())
-
-    # detect faces with the haar model
-    faces =
-      CascadeClassifier.cascadeClassifier(cascade_path())
-      |> CascadeClassifier.detectMultiScale(grey_frame,
-        scaleFactor: 1.8,
-        minNeighbors: 4
-      )
-
-    # draw a rectangle around each detected face
-    # new_frame=
-    Enum.reduce(faces, frame, fn {x, y, w, h}, mat ->
-      Evision.rectangle(mat, {x, y}, {x + w, y + h}, {0, 0, 255}, thickness: 2)
-    end)
   end
 
   def save_frame(frame, index, output_path) do

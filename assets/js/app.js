@@ -13,6 +13,7 @@ import webRTC from "./webRTC";
 import frame from "././frame";
 import { faceApi } from "./faceApi";
 import { LiveHls, InputHls } from "./streamer";
+import echoEvision  from "./echoEvision";
 
 const csrfToken = document
   .querySelector("meta[name='csrf-token']")
@@ -21,7 +22,7 @@ const csrfToken = document
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: { _csrf_token: csrfToken },
-  hooks: { rtc: serverRTC, web: webRTC, frame, LiveHls, InputHls, faceApi },
+  hooks: { rtc: serverRTC, web: webRTC, frame, LiveHls, InputHls, faceApi, echo_evision: echoEvision },
   dom: { onBeforeElUpdated: firstRender },
 });
 

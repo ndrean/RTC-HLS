@@ -24,6 +24,7 @@ defmodule RtcWeb.Router do
       live "/", RoomLive, :lobby
       live "/echo/:echo", RoomLive, :echo
       live "/ex/:ex_room_id", RoomLive, :room
+      live "/evision/:evision_room_id", RoomLive, :evision
       live "/web/:web_room_id", RoomLive, :web
       live "/frame", RoomLive, :frame
       live "/face", RoomLive, :face
@@ -35,6 +36,11 @@ defmodule RtcWeb.Router do
   scope "/api", RtcWeb do
     pipe_through :files
     post "/live-upload", HlsController, :files
+  end
+
+  scope "/hls", RtcWeb do
+    pipe_through :browser
+    get ":file", HlsController, :segment
   end
 
   # Other scopes may use custom stacks.
@@ -59,7 +65,11 @@ defmodule RtcWeb.Router do
   end
 
   def put_user_token(conn, _) do
-    conn = Plug.Conn.fetch_session(conn)
+    conn =
+      Plug.Conn.fetch_session(conn)
+
+    Plug.CSRFProtection.delete_csrf_token()
+    Plug.CSRFProtection.get_csrf_token()
 
     case Plug.Conn.get_session(conn, :user_id) |> dbg() do
       nil ->

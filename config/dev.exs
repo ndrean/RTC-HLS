@@ -46,7 +46,7 @@ config :rtc, RtcWeb.Endpoint,
 config :rtc, RtcWeb.Endpoint,
   live_reload: [
     patterns: [
-      ~r"priv/static/(?!uploads/).*(js|css|png|jpeg|jpg|gif|svg)$",
+      ~r"priv/static/(?!uploads|hls|dash|cascaded/).*(js|css|png|jpeg|jpg|gif|svg)$",
       ~r"lib/rtc_web/(controllers|live|components)/.*(ex|heex)$"
     ]
   ]

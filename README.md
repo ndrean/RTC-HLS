@@ -356,6 +356,8 @@ We could process this way 1000/20 = 50fps, transfering only 0.5MB/s per client t
 
 ### Push video chunks
 
+<https://web.dev/articles/requestvideoframecallback-rvfc>
+
 You want to broadcast our feed and send **chunks**.
 
 Once the `<video>` element has started to play the feed, we invoque `video.captureStream(20 fps)` and feed a `MediaRecorder`.
