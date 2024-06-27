@@ -16,11 +16,11 @@ defmodule RtcWeb.Endpoint do
     longpoll: [connect_info: [session: @session_options]]
 
   socket "/room", RtcWeb.RoomSocket,
-    websocket: [check_origin: false, connect_info: [:peer_data, session: @session_options]],
+    websocket: [check_origin: true, connect_info: [:peer_data, session: @session_options]],
     longpoll: false
 
   socket "/stream", RtcWeb.StreamSocket,
-    websocket: [check_origin: false, connect_info: [:peer_data, session: @session_options]],
+    websocket: [check_origin: true, connect_info: [:peer_data, session: @session_options]],
     longpoll: false
 
   # Serve at "/" the static files from "priv/static" directory.

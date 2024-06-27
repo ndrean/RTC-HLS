@@ -40,7 +40,12 @@ defmodule RtcWeb.Router do
 
   scope "/hls", RtcWeb do
     pipe_through :browser
-    get ":file", HlsController, :segment
+    get "/:file", HlsController, :segment
+  end
+
+  scope "/dash", RtcWeb do
+    pipe_through :browser
+    get "/:file", HlsController, :segment
   end
 
   # Other scopes may use custom stacks.

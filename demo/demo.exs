@@ -129,7 +129,7 @@ defmodule FFmpeger do
     ffmpeg = System.find_executable("ffmpeg")
     cmd = ~w(#{ffmpeg} -loglevel debug -hide_banner -i pipe:0 -r 20 -c:v libx264 -hls_time 2 -hls_list_size 5 -hls_flags delete_segments+append_list -hls_playlist_type event  -hls_segment_filename #{segment_path} #{playlist_path})
 
-    {:ok, _pid} = ExCmd.Process.start_link(cmd)
+    {:ok, _pid} = ExCmd.Process.start_link(cmd, log: true)
   end
 
   def handle_call({:process, path}, _from, pid) do
@@ -141,7 +141,9 @@ defmodule FFmpeger do
 
   def handle_call(:stop, _from, pid) do
     IO.puts "stopping-----------------"
-    ExCmd.Process.stop(pid)
+    :ok  =ExCmd.Process.close_stdin(pid)
+    :eof = ExCmd.Process.read(pid)
+    {:ok, 0} = ExCmd.Process.await_exit(pid)
     {:stop, :shutdown, pid}
   end
 end

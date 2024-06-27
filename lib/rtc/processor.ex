@@ -1,5 +1,6 @@
 defmodule Rtc.ProcessorAgent do
   use Agent
+  alias Evision, as: Cv
   alias Evision.CascadeClassifier
 
   @moduledoc """
@@ -34,16 +35,20 @@ defmodule Rtc.Processor do
     IO.puts("EVISION Process------")
     capture = Evision.VideoCapture.videoCapture(0)
     frame = Evision.VideoCapture.read(capture)
-    grey = Evision.cvtColor(frame, Evision.Constant.cv_COLOR_BGR2GRAY())
-    detect_and_redraw(grey)
+    grey_frame = Evision.cvtColor(frame, Evision.Constant.cv_COLOR_BGR2GRAY())
+    detect_and_redraw(grey_frame)
   end
 
-  def detect_and_redraw(grey) do
+  def detect_and_redraw(grey_frame) do
     face_cascade_model = Rtc.ProcessorAgent.get_haar_model()
 
-    faces = Evision.CascadeClassifier.detectMultiScale(face_cascade_model, grey)
+    faces =
+      Evision.CascadeClassifier.detectMultiScale(face_cascade_model, grey_frame,
+        scaleFactor: 1.8,
+        minNeighbors: 4
+      )
 
-    Enum.reduce(faces, grey, fn {x, y, w, h}, mat ->
+    Enum.reduce(faces, grey_frame, fn {x, y, w, h}, mat ->
       Evision.rectangle(mat, {x, y}, {x + w, y + h}, {0, 0, 255}, thickness: 2)
     end)
   end

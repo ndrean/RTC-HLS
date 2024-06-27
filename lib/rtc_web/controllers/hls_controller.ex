@@ -22,7 +22,6 @@ defmodule RtcWeb.HlsController do
   end
 
   def segment(conn, %{"file" => file}) do
-    dbg(file)
     path = Path.join(Application.fetch_env!(:rtc, :hls)[:hls_dir], file)
     send_file(conn, 200, path)
   end

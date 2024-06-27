@@ -45,6 +45,8 @@ defmodule Rtc.FFmpegStreamer do
     playlist_path = Path.join(hls_dir, "stream.m3u8")
     segment_path = Path.join(hls_dir, "segment_%03d.ts")
 
+    fps = Application.get_env(:rtc, :fps)
+
     hls_cmd =
       [
         ffmpeg_os_path,
@@ -52,7 +54,7 @@ defmodule Rtc.FFmpegStreamer do
         ["-i", "pipe:0"],
         # sets the input frame rate to 20 frames per second.
         # Adjusted  to the value used in te browser
-        ["-r", "20"],
+        ["-r", fps],
         # Video codec to use (libx264)
         ["-c:v", "libx264"],
         # Duration of each segment in seconds
@@ -60,7 +62,7 @@ defmodule Rtc.FFmpegStreamer do
         # Number of segments to keep in the playlist (rolling playlist)
         ["-hls_list_size", "5"],
         # Option to delete old segments
-        ["-hls_flags", "delete_segments"],
+        ["-hls_flags", "delete_segments+append_list"],
         # Type of playlist (live for continuous update)
         ["-hls_playlist_type", "event"],
         # Segment file naming pattern
@@ -81,7 +83,7 @@ defmodule Rtc.FFmpegStreamer do
         # Input from stdin
         ["-i", "-"],
         # Set the input frame rate to 20 fps
-        ["-r", "20"],
+        ["-r", fps],
         # Use the libx264 codec for video encoding
         ["-c:v", "libx264"],
         # Enable timeline usage in DASH manifest, useful for seeking
@@ -129,7 +131,7 @@ defmodule Rtc.FFmpegStreamer do
     state =
       cond do
         args[:type] in ["hls", "face"] ->
-          {:ok, ffmpeg_pid} = ExCmd.Process.start_link(hls_cmd) |> dbg()
+          {:ok, ffmpeg_pid} = ExCmd.Process.start_link(hls_cmd)
 
           # porcelain: Porcelain.spawn(ffmpeg_os_path, hls_cmd, in: :receive, out: :stream),
           %{ffmpeg_pid: ffmpeg_pid}
@@ -238,11 +240,10 @@ defmodule Rtc.FFmpegStreamer do
     end
   end
 
-  def handle_info({:stop, type}, state) when type in ["hls", "face"] do
-    ExCmd.Process.stop(state.ffmpeg_pid)
-
-    # Porcelain.Process.signal(state.porcelain, :kill)
-    # Porcelain.Process.stop(state.porcelain)
+  def handle_info({:stop, type}, %{ffmpeg_pid: pid} = state) when type in ["hls", "face"] do
+    :ok = ExCmd.Process.close_stdin(pid)
+    :eof = ExCmd.Process.read(pid)
+    {:ok, 0} = ExCmd.Process.await_exit(pid)
     {:stop, :shutdown, state}
   end
 
@@ -255,8 +256,8 @@ defmodule Rtc.FFmpegStreamer do
 
   def handle_info(:process_dash_queue, state) do
     case :queue.out(state.queue) do
-      {{:value, data}, new_queue} ->
-        Porcelain.Process.send_input(state.porcelain, data)
+      {{:value, _data}, new_queue} ->
+        # Porcelain.Process.send_input(state.porcelain, data)
         {:noreply, %{state | dash_queue: new_queue}}
 
       {:empty, _} ->

@@ -204,6 +204,10 @@ defmodule Rtc.RoomEcho do
 
   def handle_info({:ex_webrtc, pc, {:connection_state_change, :connected}}, state) do
     send(state.lv_pid, :user_connected)
+    sdp = PeerConnection.get_remote_description(pc).sdp
+    Regex.scan(~r/a=rtpmap:([a-zA-Z0-9\s]+)/, sdp) |> dbg()
+
+    # PeerConnection.get_local_description(pc) |> dbg()
     Logger.debug("Server to client PeerConnection #{inspect(pc)} successfully connected")
     {:noreply, state}
   end

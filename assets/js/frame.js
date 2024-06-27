@@ -25,15 +25,6 @@ const frame = {
 
   async mounted() {
     const userId = document.querySelector("#frame-js").dataset.userId,
-      mediaConstraints = {
-        video: {
-          facingMode: "user",
-          frameRate: { ideal: 30 },
-          width: { ideal: 1900 },
-          height: { ideal: 1500 },
-        },
-        audio: false,
-      },
       _this = this;
 
     // setup channel
@@ -49,10 +40,11 @@ const frame = {
       });
 
     this.video = document.querySelector("#webcam");
-    const stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     this.video.srcObject = stream;
     this.localStream = stream;
-    const fps = 1;
+
+    const fps = 5;
     this.intId = setInterval(captureFrame, 1000 / fps, this.video);
 
     // async function captureFrame(video) {
@@ -83,23 +75,17 @@ const frame = {
       canvas.toBlob(resolve, "image/webp", 0.9);
       const blob = await promise;
       // await sendToController(blob);
-      
+
       checkCapture(blob);
-
       const arrayBuffer = await blob.arrayBuffer();
-
       const encodedB64 = arrayBufferToB64(arrayBuffer);
-
-      // LiveView -> needs "handle_event("frame", ...) in the LiveView
-      // _this.pushEvent("frame", { data: encodedB64 });
       _this.channel.push("frame", encodedB64);
-      
+
       document.querySelector("#stats").textContent = `Image: ${(
         encodedB64.length / 1024
       ).toFixed(1)} kB, browser process: ${(performance.now() - t0).toFixed(
         0
       )} ms`;
-      
     }
 
     /*
@@ -118,7 +104,7 @@ const frame = {
           await resp.text();
         }
         */
-    
+
     // convert the ArrayBuffer to a b64 encoded string by chunks (btoa limitation to 16k characters)
     function arrayBufferToB64(arrayBuffer) {
       const bytes = new Uint8Array(arrayBuffer);

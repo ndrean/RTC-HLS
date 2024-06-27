@@ -18,7 +18,6 @@ defmodule Rtc.Application do
 
   @impl true
   def start(_type, _args) do
-    # Application.get_all_env(:rtc) |> dbg()
     :ok = ensure_dir()
 
     children = [
@@ -29,7 +28,7 @@ defmodule Rtc.Application do
       {Registry, keys: :unique, name: Rtc.Reg, timeout: :infinity},
       {DynamicSupervisor, name: Rtc.DynSup, strategy: :one_for_one},
       {Rtc.FileCleaner, [every: Application.get_env(:rtc, :hls)[:every]]},
-      Rtc.HlsPeriodicCleaner,
+      Rtc.PeriodicCleaner,
       RtcWeb.Presence,
       Rtc.Lobby,
       {FileWatcher,

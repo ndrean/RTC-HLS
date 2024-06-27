@@ -1,0 +1,198 @@
+# Working with ExCmd.Process
+
+```elixir
+Mix.install([
+  {:phoenix_playground, "~> 0.1.3"},
+  {:ex_cmd, "~> 0.12.0"},
+  {:plug_cowboy, "~> 2.7"},
+  {:corsica, "~> 2.1"},
+])
+```
+
+## FFmpeg accepting buffer input with ExCmd.Process
+
+### Context
+
+We want to broadcast ourselves using [HTTP Live Streaming](https://developer.mozilla.org/en-US/docs/Web/Media/Audio_and_video_delivery/Live_streaming_web_audio_and_video). We use `FFmpeg` to transform the streams we receive from our browser into HLS type files.
+
+Since `FFmpeg` can handle _buffer data_, we want to _keep alive_ the `FFmpeg` (OS) process.
+
+You can use `ExCmd.Process` for this.
+
+### FFmpeg GenServer
+
+The module below is a GenServer that starts an `ExCmd.Process` to run `FFmpeg`. The command argument passed to `FFmpeg` is tailored to produce these HLS type files from `stdin`.
+
+The GenServer starts the `FFmpeg` process with `ExCmd.Process.start_link/1` to whom we pass the command that run an OS process we want to execute.
+
+`FFmpeg` accepts input from stdin with the "pipe:0" argument. When you receive data from the browser, you read the data with `ExCmd.Process.read/2` which will send it to the OS process.
+
+```elixir
+
+defmodule FFmpeger do
+  use GenServer
+
+  def start_link(_) do
+    GenServer.start_link(__MODULE__, {}, name: __MODULE__)
+  end
+
+  def enqueue(path) do
+    GenServer.call(__MODULE__, {:process, path})
+  end
+
+  def pid, do: GenServer.call(__MODULE__, :pid)
+
+  def stop(), do: GenServer.call(__MODULE__, :stop)
+
+  def init(_) do
+    dir = System.tmp_dir()
+    playlist_path = Path.join(dir, "stream.m3u8")
+    segment_path = Path.join(dir, "segment_%03d.ts")
+    ffmpeg = System.find_executable("ffmpeg") || "/opt/homebrew/bin/ffmpeg"
+
+    cmd =
+      ~w(#{ffmpeg} -loglevel debug -hide_banner -i pipe:0 -r 20 -c:v libx264 -hls_time 2 -hls_list_size 5 -hls_flags delete_segments+append_list -hls_playlist_type event  -hls_segment_filename #{segment_path} #{playlist_path})
+
+    ExCmd.Process.start_link(cmd)
+  end
+
+  def handle_call(:pid,_, pid), do: {:reply, self(), pid}
+
+  def handle_call({:process, path}, _from, pid) do
+    data = File.read!(path)
+    ExCmd.Process.write(pid, data)
+    IO.puts("processed-----------------#{byte_size(data)}")
+    {:reply, :processed, pid}
+  end
+
+  def handle_call(:stop, _from, pid) do
+    IO.puts("stopping-----------------")
+    :ok = ExCmd.Process.close_stdin(pid)
+    :eof = ExCmd.Process.read(pid)
+    {:ok, 0} = ExCmd.Process.await_exit(pid)
+    {:reply, :stopped, pid}
+  end
+end
+```
+
+### Post endpoint
+
+This module is running a first webserver. It is the endpoint to which the browser will send the data
+
+```elixir
+ defmodule PostRouter do
+  use Plug.Router
+
+  plug Corsica, origins: "*", allow_methods: ["GET", "POST"]
+  plug(Plug.Parsers,
+    parsers: [:urlencoded, :multipart],
+    pass: ["*/*"],
+    json_decoder: Phoenix.json_library()
+  )
+
+  plug(:match)
+  plug(:dispatch)
+
+  get "/" do
+    IO.puts("received")
+    send_resp(conn, 200, "hello from Cowboy")
+  end
+
+  post "/upload" do
+    %{"file" => %Plug.Upload{path: path}} = conn.params
+    :processed = FFmpeger.enqueue(path)
+    IO.puts("Processed")
+    send_resp(conn, 201, "uploaded")
+  end
+end
+```
+
+Start the weberser:
+
+```elixir
+webserver2 = {Plug.Cowboy, plug: PostRouter, scheme: :http, port: 4002}
+Supervisor.start_link([webserver2, FFmpeger], strategy: :one_for_one)
+```
+
+We test that the Cowboy webserver is serving port 4002 by running a `cURL` test with `ExCmd.stream!`.
+
+```elixir
+ExCmd.stream!(~w(curl  http://localhost:4002)) |> Enum.into("")
+```
+
+### Launch the LiveView
+
+This module runs a LiveView. It will open a tab for you and display your webcam.
+
+Your feed will be automatically streamed to the webserver above.
+
+You can watch the logs below where the size of the data is displayed.
+
+You can stop the process with the button "stop". `ExCmd` will gracefully stop `Ffmpeg`.
+
+```elixir
+defmodule DemoLive do
+  use Phoenix.LiveView
+  
+  def mount(_,_,socket), do: {:ok, socket}
+
+  def render(assigns) do
+    ~H"""
+     <video id="video" width="300" height="300" controls autoplay></video>
+      <button type="button" id="stop" phx-click="stop">STOP</button>
+
+    <style type="text/css">
+      body { padding: 1em; }
+      span { font-family: monospace; }
+    </style>
+    <script>
+      function run() {
+        navigator.mediaDevices.getUserMedia({video: true})
+        .then((stream)=> {
+
+          let video = document.getElementById("video"),
+            send = true;
+
+          document.getElementById("stop").onclick = () => {
+              send = false;
+          }
+
+
+          video.srcObject = stream
+          let mediaRecorder = new MediaRecorder(stream);
+          mediaRecorder.ondataavailable = ({data}) => {
+            if (!send) return;
+            if (data.size > 0) {
+              console.log(data.size)
+              const file = new File([data], "chunk.webm", {
+                type: "video/webm",
+              });
+            const formData = new FormData();
+            formData.append("file", file);
+            fetch(`http://localhost:4002/upload`, {method: "POST",body: formData})
+            .then((res) => res.text())
+            .then(console.log)
+            }
+          }
+          mediaRecorder.start(1000)
+          })
+        }
+      run()
+
+    </script>
+    """
+  end
+
+  def handle_event("stop", _, socket) do
+    FFmpeger.stop()
+    {:noreply, socket}
+  end
+end
+
+```
+
+This command will run the LiveView.
+
+```elixir
+PhoenixPlayground.start(live: DemoLive)
+```

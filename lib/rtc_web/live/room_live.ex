@@ -17,6 +17,13 @@ defmodule RtcWeb.RoomLive do
     :ok = Phoenix.PubSub.subscribe(Rtc.PubSub, topic)
   end
 
+  defp get_pid(ref) do
+    case ref do
+      {:ok, pid} -> pid
+      {:error, {:already_started, pid}} -> pid
+    end
+  end
+
   @impl true
   def mount(params, _session, socket) do
     # "params" comes from the URL/navigation, "session" from Plug
@@ -82,8 +89,7 @@ defmodule RtcWeb.RoomLive do
     {:noreply, assign(socket, :live_action, :echo)}
   end
 
-  def handle_params(p, uri, socket) do
-    dbg({p, uri})
+  def handle_params(_p, _uri, socket) do
     {:noreply, socket}
   end
 
@@ -150,15 +156,9 @@ defmodule RtcWeb.RoomLive do
         {FFmpegStreamer, [type: "hls", user_id: socket.assigns.user_id]}
       )
 
-    hls_streamer_pid =
-      case hls_streamer_pid do
-        {:ok, pid} -> pid
-        {:error, {:already_started, pid}} -> pid
-      end
-      |> dbg()
+    hls_streamer_pid = get_pid(hls_streamer_pid)
 
     {:noreply, assign(socket, tab: "hls", hls_streamer_pid: hls_streamer_pid)}
-    #  |> push_patch(to: ~p"/hls_stream")}
   end
 
   def handle_event("switch", %{"tab" => "face"}, socket) do
@@ -168,11 +168,7 @@ defmodule RtcWeb.RoomLive do
         {FFmpegStreamer, [type: "face", user_id: socket.assigns.user_id]}
       )
 
-    face_streamer_pid =
-      case face_streamer_pid do
-        {:ok, pid} -> pid
-        {:error, {:already_started, pid}} -> pid
-      end
+    face_streamer_pid = get_pid(face_streamer_pid)
 
     {:noreply, assign(socket, tab: "face", face_streamer_pid: face_streamer_pid)}
   end
@@ -181,15 +177,10 @@ defmodule RtcWeb.RoomLive do
     evision_streamer_pid =
       DynamicSupervisor.start_child(
         Rtc.DynSup,
-        # {FFmpegStreamer, [type: "evision", user_id: socket.assigns.user_id]}
         {Rtc.ProcessorAgent, [type: "evision", user_id: socket.assigns.user_id]}
       )
 
-    evision_streamer_pid =
-      case evision_streamer_pid do
-        {:ok, pid} -> pid
-        {:error, {:already_started, pid}} -> pid
-      end
+    evision_streamer_pid = get_pid(evision_streamer_pid)
 
     evision_streamer_pid |> dbg()
 

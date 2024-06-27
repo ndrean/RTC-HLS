@@ -119,6 +119,7 @@ When you need to process the streams, such as:
   - [HLS with an Elixir server](#hls-with-an-elixir-server)
     - [What is HLS](#what-is-hls)
     - [The process](#the-process)
+    - [FFmpeg commands](#ffmpeg-commands)
     - [FileWatcher on the manifest file](#filewatcher-on-the-manifest-file)
     - [Proxy or CDN](#proxy-or-cdn)
   - [MPEG-DASH with an Elixir server](#mpeg-dash-with-an-elixir-server)
@@ -148,6 +149,8 @@ We have our video feed from our webcam. We want:
 - to get frames from this video stream and send them to the server to run some transformations server-side on them,
 - or upload these streams to the server as it is,
 - or add a face contouring layer on top of it with `face-api.js` and send these transformed chunks to the server.
+
+The models can be found [here](https://github.com/justadudewhohacks/face-api.js-models). We used the "ssdmodilenetv1"
 
 Once available, you can upload the chunks to the server:
 
@@ -1813,7 +1816,13 @@ sequenceDiagram
 
 ```
 
+### FFmpeg commands
+
+[FFmpeg Hls doc](https://ffmpeg.org/ffmpeg-formats.html#hls-2)
+
 ### FileWatcher on the manifest file
+
+[Playlist construction](https://developer.apple.com/documentation/http-live-streaming/video-on-demand-playlist-construction)
 
 ```txt
 #EXTM3U

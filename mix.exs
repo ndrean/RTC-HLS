@@ -46,7 +46,7 @@ defmodule Rtc.MixProject do
       {:ex_webrtc, "~> 0.2"},
       {:ex_webrtc_dashboard, "~> 0.2.0"},
       {:vix, "~> 0.27.0"},
-      {:image, "~> 0.37"},
+      # {:image, "~> 0.37"},
       {:evision, "~> 0.2"},
       {:ortex, "~> 0.1.9"},
       {:ex_vision, "~> 0.1"},

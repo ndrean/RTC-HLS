@@ -10,10 +10,11 @@ import Config
 config :rtc,
   generators: [timestamp_type: :utc_datetime]
 
-config :porcelain, driver: Porcelain.Driver.Basic
+# config :porcelain, driver: Porcelain.Driver.Basic
 config :nx, :default_backend, EXLA.Backend
 
 config :rtc, :ffmpeg, System.find_executable("FFMPEG")
+config :rtc, :fps, System.get_env("FPS")
 
 config :rtc, :hls,
   dash_dir: System.get_env("DASH_DIR"),
@@ -24,16 +25,6 @@ config :rtc, :hls,
 config :rtc, :models,
   haar_cascade: System.get_env("HAAR_CASCADE"),
   face_api: System.get_env("FACE_API")
-
-# config :rtc, :hls,
-#   dash_dir: "priv/static/dash/",
-#   hls_dir: "priv/static/hls/",
-#   tmp_dir: "priv/static/tmp/",
-#   every: 20
-
-# config :rtc, :models,
-#   haar_cascade: "priv/static/models/opencv_haar/haarcascade_frontalface_default.xml",
-#   face_api: "priv/static/models/face-api/"
 
 # Configures the endpoint
 config :rtc, RtcWeb.Endpoint,
@@ -51,7 +42,7 @@ config :esbuild,
   version: "0.21.4",
   rtc: [
     args:
-      ~w(js/app.js --bundle --format=esm --target=es2022 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
+      ~w(js/app.js --bundle --format=esm --target=es2022 --outdir=../priv/static/assets --external:/fonts/* --external:/images/* --sourcemap=external),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
   ]

@@ -1,10 +1,3 @@
-/**
- * Sets up a video player for a given ID with the given media stream.
- *
- * @param {string} eltId - The ID of the video element to set up.
- * @param {MediaStream} stream - The media stream to be played.
- * @returns {HTMLVideoElement} - The video element set up with the media stream.
- */
 export default function addPlayer(stream, from, eltId = "new") {
   let video;
 
@@ -31,10 +24,6 @@ export default function addPlayer(stream, from, eltId = "new") {
   video.playsInline = true;
 
   video.onloadeddata = (e) => {
-    try {
-      video.play();
-    } catch (e) {
-      console.error(e);
-    }
+    video.play();
   };
 }

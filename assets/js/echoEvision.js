@@ -1,18 +1,15 @@
 export default {
-    async mounted() {
-      
-      const mediaConstraints = {
-          video: {
-            facingMode: "user",
-            frameRate: { ideal: 30 },
-            width: { ideal: 1900 },
-            height: { ideal: 1500 },
-          },
-          audio: false,
-        }
-  
-      await navigator.mediaDevices.getUserMedia(mediaConstraints);
+  async mounted() {
+    await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: "user",
+        frameRate: { ideal: window.fps },
+        width: { ideal: 1900 },
+        height: { ideal: 1500 },
+      },
+      audio: false,
+    });
 
-      this.pushEvent("start-evision", {});
-    },
-  };
+    this.pushEvent("start-evision", {});
+  },
+};

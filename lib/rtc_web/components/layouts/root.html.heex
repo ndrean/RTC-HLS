@@ -10,6 +10,10 @@
     <script>
       window.userToken= "<%= assigns[:user_token] %>"
     </script>
+    <script>
+      window.fps="<%= Application.get_env(:rtc, :fps) %>"
+    </script>
+
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
