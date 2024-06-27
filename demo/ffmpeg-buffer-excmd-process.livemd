@@ -21,11 +21,11 @@ You can use `ExCmd.Process` for this.
 
 ### FFmpeg GenServer
 
-The module below is a GenServer that starts an `ExCmd.Process` to run `FFmpeg`. The command argument passed to `FFmpeg` is tailored to produce these HLS type files from `stdin`.
+The module below is a GenServer. It starts an `ExCmd.Process` to run `FFmpeg`. The command argument passed to `FFmpeg` is tailored to produce these HLS type files from `stdin`.
 
-The GenServer starts the `FFmpeg` process with `ExCmd.Process.start_link/1` to whom we pass the command that run an OS process we want to execute.
+The GenServer starts the `FFmpeg` process with `ExCmd.Process.start_link/1` to whom we pass the command to execute the OS process.
 
-`FFmpeg` accepts input from stdin with the "pipe:0" argument. When you receive data from the browser, you read the data with `ExCmd.Process.read/2` which will send it to the OS process.
+`FFmpeg` accepts inputs from stdin with the "pipe:0" argument. When you receive data from the browser, you read the data with `ExCmd.Process.read/2`: it will send it to the OS process.
 
 ```elixir
 
@@ -77,7 +77,9 @@ end
 
 ### Post endpoint
 
-This module is running a first webserver. It is the endpoint to which the browser will send the data
+This module is running a first webserver (Cowboy since Bandit will be running a LiveView).
+
+It serves the endpoint to which the browser will send the data (http://localhost:4002/upload)
 
 ```elixir
  defmodule PostRouter do
@@ -107,11 +109,11 @@ This module is running a first webserver. It is the endpoint to which the browse
 end
 ```
 
-Start the weberser:
+Start the weberser and the FFmpeg runner module:
 
 ```elixir
-webserver2 = {Plug.Cowboy, plug: PostRouter, scheme: :http, port: 4002}
-Supervisor.start_link([webserver2, FFmpeger], strategy: :one_for_one)
+webserver = {Plug.Cowboy, plug: PostRouter, scheme: :http, port: 4002}
+Supervisor.start_link([webserver, FFmpeger], strategy: :one_for_one)
 ```
 
 We test that the Cowboy webserver is serving port 4002 by running a `cURL` test with `ExCmd.stream!`.
@@ -122,7 +124,7 @@ ExCmd.stream!(~w(curl  http://localhost:4002)) |> Enum.into("")
 
 ### Launch the LiveView
 
-This module runs a LiveView. It will open a tab for you and display your webcam.
+This module runs a LiveView. It will automatically open a tab for you and display your webcam.
 
 Your feed will be automatically streamed to the webserver above.
 
@@ -133,7 +135,7 @@ You can stop the process with the button "stop". `ExCmd` will gracefully stop `F
 ```elixir
 defmodule DemoLive do
   use Phoenix.LiveView
-  
+
   def mount(_,_,socket), do: {:ok, socket}
 
   def render(assigns) do
@@ -191,7 +193,7 @@ end
 
 ```
 
-This command will run the LiveView.
+This command will run the LiveView and open a tab:
 
 ```elixir
 PhoenixPlayground.start(live: DemoLive)
