@@ -2,10 +2,10 @@
 
 ```elixir
 Mix.install([
-  {:phoenix_playground, "~> 0.1.3"},
   {:ex_cmd, "~> 0.12.0"},
   {:plug_cowboy, "~> 2.7"},
   {:corsica, "~> 2.1"},
+  {:kino, "~> 0.13.1"}
 ])
 ```
 
@@ -13,7 +13,7 @@ Mix.install([
 
 ### Context
 
-We want to broadcast ourselves using [HTTP Live Streaming](https://developer.mozilla.org/en-US/docs/Web/Media/Audio_and_video_delivery/Live_streaming_web_audio_and_video). We use `FFmpeg` to transform the streams we receive from our browser into HLS type files.
+We want to Live stram ourselves from the webcam using [HTTP Live Streaming](https://developer.mozilla.org/en-US/docs/Web/Media/Audio_and_video_delivery/Live_streaming_web_audio_and_video). We use `FFmpeg` to transform the streams we receive from our browser into HLS type files.
 
 Since `FFmpeg` can handle _buffer data_, we want to _keep alive_ the `FFmpeg` (OS) process.
 
@@ -70,22 +70,14 @@ defmodule FFmpeger do
     :ok = ExCmd.Process.close_stdin(pid)
     :eof = ExCmd.Process.read(pid)
     {:ok, 0} = ExCmd.Process.await_exit(pid)
-    {:reply, :stopped, pid}
+    {:stop, :shutdown, pid}
   end
 end
 ```
 
-### Webservers
+### Webserver to handle POST requests
 
-We will run two webservers.
-
-The first one will be running a LiveView on port 4000 (via `Bandit`) to display the webcam.
-
-The second one (Cowboy) will be listening on port 4002 to handle the data sent by the LiveView.
-
-This module is running a first webserver (Cowboy since Bandit will be running a LiveView).
-
-It serves the endpoint to which the browser will send the data (http://localhost:4002/upload)
+We will run a (Cowboy) WebServer to listen on port 4002 to handle the data sent by the video stream. We run a multipart HTTP POST request every second to send the binary data packaged into a file to the endpoint http://localhost:4002/upload.
 
 ```elixir
  defmodule PostRouter do
@@ -94,8 +86,7 @@ It serves the endpoint to which the browser will send the data (http://localhost
   plug Corsica, origins: "*", allow_methods: ["GET", "POST"]
   plug(Plug.Parsers,
     parsers: [:urlencoded, :multipart],
-    pass: ["*/*"],
-    json_decoder: Phoenix.json_library()
+    pass: ["*/*"]
   )
 
   plug(:match)
@@ -109,7 +100,6 @@ It serves the endpoint to which the browser will send the data (http://localhost
   post "/upload" do
     %{"file" => %Plug.Upload{path: path}} = conn.params
     :processed = FFmpeger.enqueue(path)
-    IO.puts("Processed")
     send_resp(conn, 201, "uploaded")
   end
 end
@@ -119,7 +109,9 @@ Start the weberser and the FFmpeg runner module:
 
 ```elixir
 webserver = {Plug.Cowboy, plug: PostRouter, scheme: :http, port: 4002}
-Supervisor.start_link([webserver, FFmpeger], strategy: :one_for_one)
+Supervisor.start_link([webserver, FFmpeger], strategy: :one_for_one, name: MySup)
+
+Supervisor.which_children(MySup)
 ```
 
 We test that the Cowboy webserver is serving port 4002 by running a `cURL` test with `ExCmd.stream!`.
@@ -128,44 +120,43 @@ We test that the Cowboy webserver is serving port 4002 by running a `cURL` test 
 ExCmd.stream!(~w(curl  http://localhost:4002)) |> Enum.into("")
 ```
 
-### Launch the LiveView
+### Launch the video stream
 
-This module runs a LiveView. It will automatically open a tab for you and display your webcam.
-
-Your feed will be automatically streamed to the webserver above.
+This module runs a `Kino.JS.Live`. It will run the webcam and run an HTTP POST request.
 
 You can watch the logs below where the size of the data is displayed.
 
 You can stop the process with the button "stop". `ExCmd` will gracefully stop `Ffmpeg`.
 
 ```elixir
-defmodule DemoLive do
-  use Phoenix.LiveView
+defmodule VideoLive do
 
-  def mount(_,_,socket), do: {:ok, socket}
+  use Kino.JS
+  use Kino.JS.Live
 
-  def render(assigns) do
-    ~H"""
-     <video id="video" width="300" height="300" controls autoplay></video>
-      <button type="button" id="stop" phx-click="stop">STOP</button>
+  def new() do
+    Kino.JS.Live.new(__MODULE__, "")
+  end
 
-    <style type="text/css">
-      body { padding: 1em; }
-      span { font-family: monospace; }
-    </style>
-    <script>
+  asset "main.js" do
+    """
+    export function init(ctx, _html) {
+      ctx.root.innerHTML = `
+        <video id="video" width="400" height="400" controls muted playsinline autoplay></video>
+        <button type="button" id="stop" phx-click="stop">STOP</button>
+      `;
+  
       function run() {
-        navigator.mediaDevices.getUserMedia({video: true})
+        navigator.mediaDevices.getUserMedia({video: {width: 400, heignt: 400}, audio: false})
         .then((stream)=> {
-
           let video = document.getElementById("video"),
             send = true;
-
+      
           document.getElementById("stop").onclick = () => {
               send = false;
+              ctx.pushEvent("stop", {})
           }
-
-
+      
           video.srcObject = stream
           let mediaRecorder = new MediaRecorder(stream);
           mediaRecorder.ondataavailable = ({data}) => {
@@ -183,24 +174,32 @@ defmodule DemoLive do
             }
           }
           mediaRecorder.start(1000)
-          })
-        }
-      run()
-
-    </script>
+        })
+      }
+  
+      run()      
+    }
     """
   end
 
-  def handle_event("stop", _, socket) do
+  @impl true
+  def init(html, ctx) do
+    {:ok, assign(ctx, html: html)}
+  end
+
+  @impl true
+  def handle_connect(ctx) do
+    {:ok, ctx.assigns.html, ctx}
+  end
+
+  @impl true
+  def handle_event("stop", _, ctx) do
     FFmpeger.stop()
-    {:noreply, socket}
+    {:noreply, ctx}
   end
 end
-
 ```
 
-This command will run the LiveView and open a tab:
-
 ```elixir
-PhoenixPlayground.start(live: DemoLive)
+VideoLive.new()
 ```

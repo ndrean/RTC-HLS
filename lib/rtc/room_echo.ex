@@ -238,15 +238,17 @@ defmodule Rtc.RoomEcho do
       {:ok, d} ->
         %{state | video_depayloader: d}
 
-      {:ok, _frame, d} ->
+      {:ok, frame, d} ->
+        byte_size(frame) |> dbg()
+
         # once we get the frame, we work on 1 out of X frames
         # send(state.streamer, {:echo, frame, self()})
 
         %{state | video_depayloader: d}
 
-      {:error, _msg} ->
-        # Logger.error("Error depayloading video: #{msg}")
-        state
+        # {:error, _msg} ->
+        #   # Logger.error("Error depayloading video: #{msg}")
+        #   state
     end
   end
 
