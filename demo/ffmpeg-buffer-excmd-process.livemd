@@ -75,7 +75,13 @@ defmodule FFmpeger do
 end
 ```
 
-### Post endpoint
+### Webservers
+
+We will run two webservers.
+
+The first one will be running a LiveView on port 4000 (via `Bandit`) to display the webcam.
+
+The second one (Cowboy) will be listening on port 4002 to handle the data sent by the LiveView.
 
 This module is running a first webserver (Cowboy since Bandit will be running a LiveView).
 
