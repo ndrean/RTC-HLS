@@ -96,7 +96,7 @@ defmodule RtcWeb.RoomLive do
   # Callbacks from client -----------------------------
 
   @impl true
-  # event from Room selection to navigate to
+  # event from Room selection to "navigate" (form Presence to detect as "patch" won't)
   def handle_event("goto", %{"ex_room_id" => rid}, socket) do
     # limit rooms to 2 users: using ExRTC
     exroom = "ex_#{rid}"
@@ -130,9 +130,8 @@ defmodule RtcWeb.RoomLive do
     end
   end
 
-  # event: JS.push "switch" in "tab_selector"
+  # event: JS.push "switch" in "tab_selector". It is a "patch" navigate
   # maybe starts FFmpeg streamer and sets the tab to navigate to
-
   def handle_event("switch", %{"tab" => "live"}, socket) do
     # can't go there is no playlist available
     ready =
@@ -343,6 +342,7 @@ defmodule RtcWeb.RoomLive do
           link_text="Play your webcam"
           inner_text="10 frame/s are captured from the webcam and pushed to the server. We run a face recognition and make the streams available for HTTP Live Streaming."
         />
+        <%!-- use "navigate" for Presence to change to room "self" --%>
         <Navigate.display_tab
           :if={@tab == "echo"}
           action={JS.navigate("/echo/echo_#{@id}")}

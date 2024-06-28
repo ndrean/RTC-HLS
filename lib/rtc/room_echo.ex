@@ -263,6 +263,7 @@ defmodule Rtc.RoomEcho do
   defp setup_transceivers(pc) do
     video = MediaStreamTrack.new(:video)
     audio = MediaStreamTrack.new(:audio)
+    # media_stream_id = MediaStreamTrack.generate_stream_id()
     {:ok, _sender} = PeerConnection.add_track(pc, video)
     {:ok, _sender} = PeerConnection.add_track(pc, audio)
 

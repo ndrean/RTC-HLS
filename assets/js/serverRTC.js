@@ -74,6 +74,7 @@ const serverRTC = {
       },
 
       answer: async (msg) => {
+        console.log(msg.sdp);
         await rtc.pc.setRemoteDescription(msg.sdp);
         console.log("--> handled Answer from ", msg.from);
       },
@@ -83,6 +84,7 @@ const serverRTC = {
           return;
         }
         //   console.log("--> Added ICE candidate from", from);
+        console.log(candidate);
         await rtc.pc.addIceCandidate(candidate);
       },
     };
