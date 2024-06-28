@@ -13,7 +13,7 @@ Mix.install([
 
 ### Context
 
-We want to Live stram ourselves from the webcam using [HTTP Live Streaming](https://developer.mozilla.org/en-US/docs/Web/Media/Audio_and_video_delivery/Live_streaming_web_audio_and_video). We use `FFmpeg` to transform the streams we receive from our browser into HLS type files.
+We want to Live stream ourselves from the webcam using [HTTP Live Streaming](https://developer.mozilla.org/en-US/docs/Web/Media/Audio_and_video_delivery/Live_streaming_web_audio_and_video). We use `FFmpeg` to transform the streams we receive from our browser into HLS type files.
 
 Since `FFmpeg` can handle _buffer data_, we want to _keep alive_ the `FFmpeg` (OS) process.
 
@@ -134,20 +134,39 @@ defmodule VideoLive do
   use Kino.JS
   use Kino.JS.Live
 
+  @html """
+    <div id="elt">
+      <video id="video" width="400" height="400" controls muted playsinline autoplay></video>
+      <button type="button" id="stop" phx-click="stop">STOP</button>
+    </div>
+    """
+      
+      
   def new() do
-    Kino.JS.Live.new(__MODULE__, "")
+    Kino.JS.Live.new(__MODULE__, @html)
   end
 
+  asset "main.css" do
+    """
+    #elt {
+      display: flex;
+      flex-direction: column;
+      align-items: center
+    }
+    button {
+      margin-top: 1em;
+    }
+    """
+  end
+  
   asset "main.js" do
     """
-    export function init(ctx, _html) {
-      ctx.root.innerHTML = `
-        <video id="video" width="400" height="400" controls muted playsinline autoplay></video>
-        <button type="button" id="stop" phx-click="stop">STOP</button>
-      `;
-  
+    export function init(ctx, html) {
+      ctx.importCSS("main.css")
+      ctx.root.innerHTML = html
+        
       function run() {
-        navigator.mediaDevices.getUserMedia({video: {width: 400, heignt: 400}, audio: false})
+        navigator.mediaDevices.getUserMedia({video: {width: 400, height: 400}, audio: false})
         .then((stream)=> {
           let video = document.getElementById("video"),
             send = true;
