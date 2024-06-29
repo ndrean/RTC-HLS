@@ -24,7 +24,12 @@ defmodule Rtc.RoomEcho do
 
   defp set_ffmpeg do
     ffmpeg = System.find_executable("ffmpeg") || "/opt/hombrew/bin/ffmpeg"
-    {:ok, _pid} = ExCmd.Process.start_link(~w(#{ffmpeg} -i pipe:0 -vframes 1 -q:v 2 pipe:1))
+
+    {:ok, _pid} =
+      ExCmd.Process.start_link(
+        ~w(#{ffmpeg} -i pipe:0 -vframes 1 -q:v 2 /Users/nevendrean/code/elixir/RTC-HLS/frame.jpg),
+        log: true
+      )
   end
 
   def start_link(args) do
@@ -51,9 +56,8 @@ defmodule Rtc.RoomEcho do
 
     Logger.debug("Starting Room:#{rid} GS, #{inspect(self())}")
 
-    # {:ok, ffmpeg} = set_ffmpeg()
-
-    # send(self(), :init_streamer)
+    {:ok, ffmpeg} = set_ffmpeg()
+    Process.monitor(ffmpeg)
 
     {:ok,
      %{
@@ -67,8 +71,7 @@ defmodule Rtc.RoomEcho do
        client_audio_track: nil,
        video_depayloader: VP8Depayloader.new(),
        i: 1,
-       time: System.monotonic_time()
-       #  ffmpeg: ffmpeg
+       ffmpeg: ffmpeg
      }, {:continue, :init_streamer}}
   end
 
@@ -241,7 +244,7 @@ defmodule Rtc.RoomEcho do
 
   ########################################################################################
   defp handle_paquet(packet, state) do
-    %{i: i, lv_pid: lv_pid} = state
+    %{i: i, lv_pid: lv_pid, ffmpeg: ffmpeg} = state
 
     case VP8Depayloader.write(state.video_depayloader, packet) do
       {:ok, d} ->
@@ -253,13 +256,14 @@ defmodule Rtc.RoomEcho do
         if Integer.mod(n, 20) == 0 do
           Logger.debug(%{count: i, size: byte_size(frame)})
 
-          File.write("/Users/nevendrean/code/elixir/RTC-HLS/data.vp8", frame)
           # ExCmd.stream!(
           #   ~w(ffmpeg -i pipe:0 -vframes 1 -q:v 2 -f image2 /Users/nevendrean/code/elixir/RTC-HLS/test.jpg),
           #   input: frame
           # )
           # # |> Stream.into(File.stream!("/Users/nevendrean/code/elixir/RTC-HLS/test.jpg"))
           # |> Stream.run()
+
+          ExCmd.Process.write(ffmpeg, frame)
 
           # |> then(fn data -> send(lv_pid, {:echo, data, n}) end)
         end
