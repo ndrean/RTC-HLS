@@ -22,6 +22,11 @@ defmodule Rtc.RoomEcho do
 
   defp id(room_id), do: {:via, Registry, {Rtc.Reg, room_id}}
 
+  defp set_ffmpeg do
+    ffmpeg = System.find_executable("ffmpeg") || "/opt/hombrew/bin/ffmpeg"
+    {:ok, _pid} = ExCmd.Process.start_link(~w(#{ffmpeg} -i pipe:0 -vframes 1 -q:v 2 pipe:1))
+  end
+
   def start_link(args) do
     rid = Keyword.get(args, :room_id)
     GenServer.start_link(__MODULE__, args, name: id(rid))
@@ -46,6 +51,8 @@ defmodule Rtc.RoomEcho do
 
     Logger.debug("Starting Room:#{rid} GS, #{inspect(self())}")
 
+    # {:ok, ffmpeg} = set_ffmpeg()
+
     # send(self(), :init_streamer)
 
     {:ok,
@@ -59,8 +66,9 @@ defmodule Rtc.RoomEcho do
        client_video_track: nil,
        client_audio_track: nil,
        video_depayloader: VP8Depayloader.new(),
-       i: 0,
+       i: 1,
        time: System.monotonic_time()
+       #  ffmpeg: ffmpeg
      }, {:continue, :init_streamer}}
   end
 
@@ -197,8 +205,7 @@ defmodule Rtc.RoomEcho do
         %{client_video_track: %{id: client_track_id, kind: :video}} = state
       ) do
     PeerConnection.send_rtp(pc, state.serv_video_track.id, packet)
-
-    state = handle_v_paquet(packet, state)
+    state = handle_paquet(packet, state)
     {:noreply, state}
   end
 
@@ -233,22 +240,31 @@ defmodule Rtc.RoomEcho do
   end
 
   ########################################################################################
-  defp handle_v_paquet(packet, %{i: _i} = state) do
+  defp handle_paquet(packet, state) do
+    %{i: i, lv_pid: lv_pid} = state
+
     case VP8Depayloader.write(state.video_depayloader, packet) do
       {:ok, d} ->
         %{state | video_depayloader: d}
 
       {:ok, frame, d} ->
-        byte_size(frame) |> dbg()
+        n = i + 1
 
-        # once we get the frame, we work on 1 out of X frames
-        # send(state.streamer, {:echo, frame, self()})
+        if Integer.mod(n, 20) == 0 do
+          Logger.debug(%{count: i, size: byte_size(frame)})
 
-        %{state | video_depayloader: d}
+          ExCmd.stream!(~w(ffmpeg -i pipe:0 -vframes 1 -q:v 2 pipe:1), input: frame)
+          |> Enum.into("")
+          |> dbg()
 
-        # {:error, _msg} ->
-        #   # Logger.error("Error depayloading video: #{msg}")
-        #   state
+          # |> then(fn data -> send(lv_pid, {:echo, data, n}) end)
+        end
+
+        %{state | video_depayloader: d, i: n}
+
+      {:error, msg} ->
+        Logger.error("Error depayloading video: #{msg}")
+        state
     end
   end
 

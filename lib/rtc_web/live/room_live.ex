@@ -293,6 +293,12 @@ defmodule RtcWeb.RoomLive do
     }
   end
 
+  # TEST ECHO
+  def handle_info({:img, _data, i}, socket) do
+    dbg(i)
+    {:noreply, socket}
+  end
+
   # Rendering --------------------------------------------------------
   @impl true
   def render(assigns) when assigns.live_action == :lobby do

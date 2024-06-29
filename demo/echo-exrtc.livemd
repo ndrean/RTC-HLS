@@ -3,7 +3,8 @@
 ```elixir
 Mix.install([
   {:kino, "~> 0.13.1"},
-  {:ex_webrtc, "~> 0.3.0"}
+  {:ex_webrtc, "~> 0.3.0"},
+  {:ex_cmd, "~> 0.12.0"}
 ])
 ```
 
@@ -37,6 +38,7 @@ graph LR;
 ### Server-side WebRTC module
 
 ```elixir
+
 defmodule RtcServer do
   use GenServer
 
@@ -54,6 +56,9 @@ defmodule RtcServer do
     %{serv_video_track: video_track}
   end
 
+  # ??? -> can't find ffmpeg in Livebook?
+
+
   def start_link(args), do: GenServer.start_link(__MODULE__, args, name: __MODULE__)
   def connect, do: GenServer.call(__MODULE__, :connect)
 
@@ -66,11 +71,14 @@ defmodule RtcServer do
   @impl true
   def init(_args) do
     Logger.info("ExRtc PeerConnection started")
+
+    
     {:ok, %{
       sender: nil,
       pc: nil,
       client_video_track: nil,
-      video_depayloader: Depayloader.new()
+      video_depayloader: Depayloader.new(),
+      i: 0
     }}
   end
 
@@ -146,13 +154,8 @@ defmodule RtcServer do
       ) do
     PeerConnection.send_rtp(pc, state.serv_video_track.id, packet)
    
-    state = 
-      cond do
-        client_track_id == state.serv_video_track.id ->
-          handle_paquet(packet, state)
-        true ->
-          state
-      end
+    state = handle_paquet(packet, state)
+        
     {:noreply, state}
   end
 
@@ -176,12 +179,12 @@ defmodule RtcServer do
           
 
         {:ok, frame, d} ->
-          byte_size(frame)
-          %{state | video_depayloader: d}
-
-        msg ->
-          dbg(msg)
-          state
+          n = state.i + 1
+          if (Integer.mod(n, 50) == 0) do
+            Logger.debug(%{count: n, size: byte_size(frame)})
+          end
+          
+          %{state | video_depayloader: d, i: state.i + 1}
     end
   end
 
@@ -223,6 +226,7 @@ On connection, a new `PeerConnection` is created. Since the server is already co
 Once the connection is set, the client will receive RTP packets and digest them into a `<video>` element.
 
 ```elixir
+
 defmodule VideoLive do
   # GenServer to communicate between browser and Livebook server
   
@@ -241,6 +245,10 @@ defmodule VideoLive do
       <figure>
         <video id="echo" width="300" height="300" autoplay muted playsinline></video>
         <figcaption>Echo webcam</figcaption>
+      </figure>
+      <figure>
+        <img id="img"/>
+        <figcaption>Some frames</figcaption>
       </figure>
     </div>
     """
