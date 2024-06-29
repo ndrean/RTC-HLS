@@ -9,6 +9,31 @@ Mix.install([
 
 ## SFU: ExWebRTC
 
+The webcam is captured and displayed in a first `<video>` element.
+
+The browser and the Elixir SFU will establish a WebRTC PeerConnection (UDP).
+
+The signaling uses the Livebook WebSocket to exchange SDP and ICE candidates.
+
+Once connected, the Elixir SFU will receive the streams from the `<video 1>`. In this Echo configuration, it will send back the streams to the connected peer.
+
+These streams are displayed in another `<video 2>` element.
+
+<!-- livebook:{"break_markdown":true} -->
+
+```mermaid
+graph LR;
+  B1[Browser <br> PeerConnection]-.->L[Livebook];
+  L-.->Ex[Elixir SFU <br> PeerConnection];
+  Ex -.-> L
+  L -.-> B1
+
+  B3[video 1]--stream -->ExSFU[Elixir SFU]
+  ExSFU --stream -->B4[video 2];
+```
+
+<!-- livebook:{"break_markdown":true} -->
+
 ### Server-side WebRTC module
 
 ```elixir
@@ -16,7 +41,7 @@ defmodule RtcServer do
   use GenServer
 
   alias ExWebRTC.{ICECandidate, PeerConnection, SessionDescription, MediaStreamTrack}
-  #alias ExWebRTC.RTP.VP8Depayloader
+  alias ExWebRTC.RTP.VP8.Depayloader
 
   require Logger
 
@@ -45,7 +70,7 @@ defmodule RtcServer do
       sender: nil,
       pc: nil,
       client_video_track: nil,
-      #video_deplayloader: VP8Depayloader.new()
+      video_depayloader: Depayloader.new()
     }}
   end
 
@@ -120,19 +145,44 @@ defmodule RtcServer do
         %{client_video_track: %{id: client_track_id, kind: :video}} = state
       ) do
     PeerConnection.send_rtp(pc, state.serv_video_track.id, packet)
+   
+    state = 
+      cond do
+        client_track_id == state.serv_video_track.id ->
+          handle_paquet(packet, state)
+        true ->
+          state
+      end
     {:noreply, state}
   end
 
   def handle_info({:ex_webrtc, pc, {:connection_state_change, :connected}}, state) do
     sdp = PeerConnection.get_remote_description(pc).sdp
-    Regex.scan(~r/a=rtpmap:([a-zA-Z0-9\s]+)/, sdp) |> dbg()
+    [codec, _] = 
+      Regex.scan(~r/a=rtpmap:([a-zA-Z0-9\s]+)/, sdp) |> List.first()
 
-    Logger.warning("Server to client PeerConnection #{inspect(pc)} successfully connected")
+    Logger.warning("PeerConnection successfully connected, using #{inspect(codec)}")
     {:noreply, state}
   end
 
   def handle_info({:ex_webrtc, _pc, _msg}, state) do
     {:noreply, state}
+  end
+
+  defp handle_paquet(packet, state) do
+    case Depayloader.write(state.video_depayloader, packet) do
+        {:ok, d} ->
+          %{state | video_depayloader: d}
+          
+
+        {:ok, frame, d} ->
+          byte_size(frame)
+          %{state | video_depayloader: d}
+
+        msg ->
+          dbg(msg)
+          state
+    end
   end
 
   defp gather_candidates(pc) do
@@ -170,12 +220,13 @@ The signaling is via the WebSocket connection that exists in a Livebook between 
 
 On connection, a new `PeerConnection` is created. Since the server is already connected, the client will send an "offer" via the signaling channel. The client expects an "answer" back. It will also send "Ice" candidates via the signaling channel, and expects to receive Ice candidates from the server.
 
-Once the connection is set, the client will receive RTP packets and digest them into an `<video>` element.
+Once the connection is set, the client will receive RTP packets and digest them into a `<video>` element.
 
 ```elixir
 
 defmodule VideoLive do
-
+  # GenServer to communicate between browser and Livebook server
+  
   use Kino.JS
   use Kino.JS.Live
 
@@ -229,47 +280,54 @@ defmodule VideoLive do
         window.navigator.mediaDevices
           .getUserMedia({ video: { width: 300, height: 300 }, audio: false })
           .then((stream) => {
-            let videoIn = document.getElementById("video-in"),
-              send = true;
-
+    
+            // display the webcam in a <video> tag
+            const videoIn = document.getElementById("video-in"), 
             videoIn.srcObject = stream;
 
             const pc = new RTCPeerConnection(iceConf);
+    
+            // capture local MediaStream (from the webcam)
             const tracks = stream.getTracks();
             tracks.forEach((track) => pc.addTrack(track, stream));
 
+            // send offer to any peer connected on the signaling channel
             pc.onicecandidate = ({candidate}) => { 
               if (candidate === null) { return};
               ctx.pushEvent("ice", { candidate: candidate.toJSON(), type: "ice" });
             };
 
-            pc.ontrack = ({ streams }) => {
-              console.log("--> Received remote track");
-              const echo = document.querySelector("#echo");
-              console.log(streams[0])
-              echo.srcObject = streams[0];
-              //echo.onlodadeddata = () => echo.play()
-            };
-
+            // send offer to any peer connected on the signaling channel
             pc.onnegotiationneeded = async () => {
               const offer = await pc.createOffer();
               await pc.setLocalDescription(offer);
               console.log("--> Offer created and sent");
               ctx.pushEvent("offer", { sdp: offer});
             };
-
-            pc.onconnectionstatechange = () => {
-              console.log("~~> Connection state: ", pc.connectionState);
+    
+            // received from the remote peer (Elixir SFU server here) via UDP
+            pc.ontrack = ({ streams }) => {
+              console.log("--> Received remote track");
+              const echo = document.querySelector("#echo");
+              echo.srcObject = streams[0];
+              //echo.onlodadeddata = () => echo.play()
             };
 
+            // received from the remote peer via signaling channel (Elixir server)
             ctx.handleEvent("ice", async ({candidate}) => {
               await pc.addIceCandidate(candidate);
             });
 
+            // received from the remote peer via signaling channel (Elixir server)
             ctx.handleEvent("answer", async (msg) => {
               console.log("--> handled Answer");
               await pc.setRemoteDescription(msg);
             });
+    
+            // internal WebRTC listener, for information or other action...
+            pc.onconnectionstatechange = () => {
+              console.log("~~> Connection state: ", pc.connectionState);
+            };
           });
       }
       run()
@@ -287,7 +345,7 @@ defmodule VideoLive do
     {:ok, ctx.assigns.html, ctx}
   end
 
-  # received from the browser, call server
+  # received from the browser via the signaling WebSocket, call server
   @impl true
   def handle_event("offer",%{"sdp" => sdp}, ctx) do
     RtcServer.receive_signaling_msg({sdp, self()})
@@ -299,7 +357,7 @@ defmodule VideoLive do
     {:noreply, ctx}
   end
 
-  # received from the server, send to the browser
+  # received from the server, send to the browser via signaling WebSocket
   @impl true
   def handle_info({:signaling, %{"type" => "answer"} = msg}, ctx) do
     broadcast_event(ctx, "answer", msg)
