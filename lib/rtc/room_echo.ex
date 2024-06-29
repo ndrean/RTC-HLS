@@ -253,9 +253,13 @@ defmodule Rtc.RoomEcho do
         if Integer.mod(n, 20) == 0 do
           Logger.debug(%{count: i, size: byte_size(frame)})
 
-          ExCmd.stream!(~w(ffmpeg -i pipe:0 -vframes 1 -q:v 2 pipe:1), input: frame)
-          |> Enum.into("")
-          |> dbg()
+          File.write("/Users/nevendrean/code/elixir/RTC-HLS/data.vp8", frame)
+          # ExCmd.stream!(
+          #   ~w(ffmpeg -i pipe:0 -vframes 1 -q:v 2 -f image2 /Users/nevendrean/code/elixir/RTC-HLS/test.jpg),
+          #   input: frame
+          # )
+          # # |> Stream.into(File.stream!("/Users/nevendrean/code/elixir/RTC-HLS/test.jpg"))
+          # |> Stream.run()
 
           # |> then(fn data -> send(lv_pid, {:echo, data, n}) end)
         end

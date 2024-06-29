@@ -38,6 +38,10 @@ graph LR;
 ### Server-side WebRTC module
 
 ```elixir
+Path.join(File.cwd!(), "/code/elixir")
+```
+
+```elixir
 
 defmodule RtcServer do
   use GenServer
@@ -180,8 +184,10 @@ defmodule RtcServer do
 
         {:ok, frame, d} ->
           n = state.i + 1
-          if (Integer.mod(n, 50) == 0) do
+          if (Integer.mod(n, 100) == 0) do
             Logger.debug(%{count: n, size: byte_size(frame)})
+             Path.join(File.cwd!(), "frame.vp8")
+            |> File.write!(frame)
           end
           
           %{state | video_depayloader: d, i: state.i + 1}
