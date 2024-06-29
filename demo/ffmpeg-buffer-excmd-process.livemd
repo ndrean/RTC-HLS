@@ -1,15 +1,16 @@
-# Working with ExCmd.Process
+# Working with ExCmd.Process/Exile.Process
 
 ```elixir
 Mix.install([
   {:ex_cmd, "~> 0.12.0"},
-  {:plug_cowboy, "~> 2.7"},
   {:corsica, "~> 2.1"},
-  {:kino, "~> 0.13.1"}
+  {:kino, "~> 0.13.1"},
+  {:bandit, "~> 1.5"},
+  {:exile, "~> 0.10.0"}
 ])
 ```
 
-## FFmpeg accepting buffer input with ExCmd.Process
+## FFmpeg accepting buffer input with ExCmd.Process/Exile.process
 
 ### Context
 
@@ -17,7 +18,7 @@ We want to Live stream ourselves from the webcam using [HTTP Live Streaming](htt
 
 Since `FFmpeg` can handle _buffer data_, we want to _keep alive_ the `FFmpeg` (OS) process.
 
-You can use `ExCmd.Process` for this.
+You can use `ExCmd.Process` or `Exile.process` for this.
 
 ### FFmpeg GenServer
 
@@ -28,12 +29,11 @@ The GenServer starts the `FFmpeg` process with `ExCmd.Process.start_link/1` to w
 `FFmpeg` accepts inputs from stdin with the "pipe:0" argument. When you receive data from the browser, you read the data with `ExCmd.Process.read/2`: it will send it to the OS process.
 
 ```elixir
-
 defmodule FFmpeger do
   use GenServer
 
-  def start_link(_) do
-    GenServer.start_link(__MODULE__, {}, name: __MODULE__)
+  def start_link(opt) do
+    GenServer.start_link(__MODULE__,opt, name: __MODULE__)
   end
 
   def enqueue(path) do
@@ -44,7 +44,7 @@ defmodule FFmpeger do
 
   def stop(), do: GenServer.call(__MODULE__, :stop)
 
-  def init(_) do
+  def init(opt) do
     dir = System.tmp_dir()
     playlist_path = Path.join(dir, "stream.m3u8")
     segment_path = Path.join(dir, "segment_%03d.ts")
@@ -52,25 +52,49 @@ defmodule FFmpeger do
 
     cmd =
       ~w(#{ffmpeg} -loglevel debug -hide_banner -i pipe:0 -r 20 -c:v libx264 -hls_time 2 -hls_list_size 5 -hls_flags delete_segments+append_list -hls_playlist_type event  -hls_segment_filename #{segment_path} #{playlist_path})
-
-    ExCmd.Process.start_link(cmd)
+  
+  
+    case opt do
+      :exile -> 
+        {:ok, pid} = Exile.Process.start_link(cmd)
+        {:ok, {pid, :exile}}
+      :excmd ->
+        {:ok, pid} = ExCmd.Process.start_link(cmd)
+        {:ok, {pid, :excmd}}
+    end
   end
 
-  def handle_call(:pid,_, pid), do: {:reply, self(), pid}
+  def handle_call(:pid,_, state), do: {:reply, self(), state}
 
-  def handle_call({:process, path}, _from, pid) do
+  def handle_call({:process, path}, _from, {pid, :excmd}) do
     data = File.read!(path)
     ExCmd.Process.write(pid, data)
     IO.puts("processed-----------------#{byte_size(data)}")
-    {:reply, :processed, pid}
+    {:reply, :processed, {pid, :excmd}}
   end
 
-  def handle_call(:stop, _from, pid) do
+  def handle_call({:process, path}, _from, {pid, :exile}) do
+    data = File.read!(path)
+    Exile.Process.write(pid, data)
+    IO.puts("processed-----------------#{byte_size(data)}")
+    {:reply, :processed, {pid, :exile}}
+  end
+
+  
+
+  def handle_call(:stop, _from, {pid, :exile}) do
     IO.puts("stopping-----------------")
-    :ok = ExCmd.Process.close_stdin(pid)
-    :eof = ExCmd.Process.read(pid)
-    {:ok, 0} = ExCmd.Process.await_exit(pid)
-    {:stop, :shutdown, pid}
+    :ok = Exile.Process.close_stdin(pid)
+    {:ok, 0} = Exile.Process.await_exit(pid)
+    {:stop, :shutdown, {pid, :exile}}
+  end
+
+  def handle_call(:stop, _from, {pid, :excmd}) do
+    IO.puts("stopping-----------------")
+     :ok = ExCmd.Process.close_stdin(pid)
+     :eof = ExCmd.Process.read(pid)
+     {:ok, 0} = ExCmd.Process.await_exit(pid)
+    {:stop, :shutdown, {pid, :excmd}}
   end
 end
 ```
@@ -92,10 +116,14 @@ We will run a (Cowboy) WebServer to listen on port 4002 to handle the data sent 
   plug(:match)
   plug(:dispatch)
 
-  get "/" do
-    IO.puts("received")
-    send_resp(conn, 200, "hello from Cowboy")
+  get "/exile" do
+    send_resp(conn, 200, "hello from Bandit with exile")
   end
+
+  get "/excmd" do
+    send_resp(conn, 200, "hello from Bandit with excmd")
+  end
+   
 
   post "/upload" do
     %{"file" => %Plug.Upload{path: path}} = conn.params
@@ -105,19 +133,24 @@ We will run a (Cowboy) WebServer to listen on port 4002 to handle the data sent 
 end
 ```
 
-Start the weberser and the FFmpeg runner module:
+Start the weberser and the FFmpeg runner module. You can choose the process runner by passing `:exile` or `:excmd` to the GenServer FFmpeger.
 
 ```elixir
-webserver = {Plug.Cowboy, plug: PostRouter, scheme: :http, port: 4002}
-Supervisor.start_link([webserver, FFmpeger], strategy: :one_for_one, name: MySup)
+webserver = {Bandit, plug: PostRouter, scheme: :http, port: 4002}
+
+Supervisor.start_link([webserver, {FFmpeger, :exile}], strategy: :one_for_one, name: MySup)
 
 Supervisor.which_children(MySup)
 ```
 
-We test that the Cowboy webserver is serving port 4002 by running a `cURL` test with `ExCmd.stream!`.
+We test that the Bandit webserver is serving port 4002 by running a `cURL` test with `ExCmd.stream!` and `Exile.stream!`.
 
 ```elixir
-ExCmd.stream!(~w(curl  http://localhost:4002)) |> Enum.into("")
+ExCmd.stream!(~w(curl  http://localhost:4002/excmd)) |> Enum.into("")
+```
+
+```elixir
+Exile.stream!(~w(curl  http://localhost:4002/exile)) |> Enum.into("")
 ```
 
 ### Launch the video stream
