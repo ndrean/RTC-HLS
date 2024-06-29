@@ -223,7 +223,6 @@ On connection, a new `PeerConnection` is created. Since the server is already co
 Once the connection is set, the client will receive RTP packets and digest them into a `<video>` element.
 
 ```elixir
-
 defmodule VideoLive do
   # GenServer to communicate between browser and Livebook server
   
@@ -280,9 +279,9 @@ defmodule VideoLive do
         window.navigator.mediaDevices
           .getUserMedia({ video: { width: 300, height: 300 }, audio: false })
           .then((stream) => {
-    
+
             // display the webcam in a <video> tag
-            const videoIn = document.getElementById("video-in"), 
+            const videoIn = document.getElementById("video-in");
             videoIn.srcObject = stream;
 
             const pc = new RTCPeerConnection(iceConf);
@@ -304,7 +303,7 @@ defmodule VideoLive do
               console.log("--> Offer created and sent");
               ctx.pushEvent("offer", { sdp: offer});
             };
-    
+
             // received from the remote peer (Elixir SFU server here) via UDP
             pc.ontrack = ({ streams }) => {
               console.log("--> Received remote track");
@@ -318,12 +317,11 @@ defmodule VideoLive do
               await pc.addIceCandidate(candidate);
             });
 
-            // received from the remote peer via signaling channel (Elixir server)
             ctx.handleEvent("answer", async (msg) => {
               console.log("--> handled Answer");
               await pc.setRemoteDescription(msg);
             });
-    
+
             // internal WebRTC listener, for information or other action...
             pc.onconnectionstatechange = () => {
               console.log("~~> Connection state: ", pc.connectionState);
@@ -368,7 +366,6 @@ defmodule VideoLive do
     if msg["candidate"], do: broadcast_event(ctx, "ice",msg)
     {:noreply, ctx}
   end
-
 end
 ```
 
