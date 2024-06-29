@@ -7,7 +7,7 @@ This is a "basic" `LiveView` app where we experiment processing videos streams w
 
 Our transformation will be the "Hello World" of computer vision, **face contouring**.
 
-We heavily use `FFmpeg` and the Elixir libraries `ExWebERTC`, `Evision` (`OpenCV` made accessible to `Elixir`), `Porcelain` or `ExCmd` to interact with external programs (of the BEAM), and of course `Phoenix LiveView` and `Elixir.Channel`.
+We heavily use `FFmpeg` and the Elixir libraries `ExWebERTC`, `Evision` (`OpenCV` made accessible to `Elixir`), `ExCmd` as the `FFmpeg` runner (on the OS level), and of course `Phoenix LiveView` and `Elixir.Channel`.
 
 **:hash: What are we building?**
 
@@ -45,7 +45,8 @@ We will focus on:
 
 **:hash: WebRTC**
 
-> This technology is about making web apps capable of exchanging media content - audio and video - between browsers _without requiring an intermediary_. It is based on RTP. It uses codecs to compress data. The [WebRTC API](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API) is natively implemented in (almsot every) web navigator.
+> This technology is about making web apps capable of exchanging media content - audio and video - between browsers _without requiring an intermediary_. It is intended for peer-to-peer delivery within a limited number of browsers, like video conferencing, rather than large-scale broadcasting.
+> It is based on RTP. It uses codecs to compress data. The [WebRTC API](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API) is natively implemented in (almsot every) web navigator.
 
 > We will also use an Elixir implementation - [Elixir WebRTC](https://github.com/elixir-webrtc/ex_webrtc) - of the WebRTC to connect clients (named `ExWebRTC` here). It is a WebRTC gateway on the server.
 
