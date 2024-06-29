@@ -184,9 +184,10 @@ defmodule RtcServer do
           # we measure around 30pfs
           n = state.i + 1
           t = System.monotonic_time(:microsecond)
-          if (Integer.mod(n, 100) == 0) do
+          q = 30
+          if (Integer.mod(n, q) == 0) do
              # Path.join(File.cwd!(), "frame.vp8") |> File.write!(frame)
-            Logger.debug(%{size: byte_size(frame), fps: round(100_000_000/(t-state.t))})
+            Logger.debug(%{size: Float.round(byte_size(frame)*8/1000,1), fps: round(q* 1_000_000/(t-state.t))})
             %{state | video_depayloader: d, i: n, t: t}
           else
             %{ state | video_depayloader: d, i: n}

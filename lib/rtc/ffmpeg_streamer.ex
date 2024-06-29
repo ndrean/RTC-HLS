@@ -113,7 +113,7 @@ defmodule Rtc.FFmpegStreamer do
         # Input from stdin
         ["-i", "-"],
         # Capture only the first frame
-        ["-frames:v", "1"],
+        ["-vframes", "1"],
         # Output format as an image pipe
         ["-f", "image2pipe"],
         # Use MJPEG codec for output
@@ -132,25 +132,20 @@ defmodule Rtc.FFmpegStreamer do
       cond do
         args[:type] in ["hls", "face"] ->
           {:ok, ffmpeg_pid} = ExCmd.Process.start_link(hls_cmd)
-
-          # porcelain: Porcelain.spawn(ffmpeg_os_path, hls_cmd, in: :receive, out: :stream),
           %{ffmpeg_pid: ffmpeg_pid}
 
         args[:type] == "evision" ->
           IO.puts("STARTED EVISION FFMPEG-------")
           %{}
 
-        # %{porcelain: Porcelain.spawn(ffmpeg_os_path, evision_cmd, in: :receive, out: :stream)}
-
         args[:type] == "dash" ->
           {:ok, ffmpeg_pid} = ExCmd.Process.start_link(dash_cmd) |> dbg()
 
-          # porcelain: Porcelain.spawn(ffmpeg_os_path, dash_cmd, in: :receive, out: :stream)
           %{ffmpeg_pid: ffmpeg_pid}
 
         args[:type] in ["frame", "echo"] ->
-          # porcelain: Porcelain.spawn(ffmpeg_os_path, echo_cmd, in: :receive, out: :stream),
-          %{cmd: echo_cmd}
+          {:ok, ffmpeg_pid} = ExCmd.Process.start_link(echo_cmd)
+          %{ffmpeg_pid: ffmpeg_pid}
       end
       |> Map.merge(%{type: args[:type], queue: :queue.new()})
 
@@ -227,10 +222,7 @@ defmodule Rtc.FFmpegStreamer do
   def handle_info(:process_hls_queue, state) do
     case :queue.out(state.queue) do
       {{:value, path}, new_queue} ->
-        data = File.read!(path)
-        ExCmd.Process.write(state.ffmpeg_pid, data)
-        # Porcelain.Process.send_input(state.porcelain, data)
-
+        ExCmd.Process.write(state.ffmpeg_pid, File.read!(path))
         send(self(), :process_hls_queue)
         {:noreply, %{state | queue: new_queue}}
 
@@ -271,10 +263,10 @@ defmodule Rtc.FFmpegStreamer do
   end
 
   # for echo ------
-  # def handle_info({"echo", _data, _sender_pid}, state) do
-  #   # DO SOMETHING ????
-  #   {:noreply, state}
-  # end
+  def handle_info({"echo", _data, _sender_pid}, state) do
+    # DO SOMETHING ????
+    {:noreply, state}
+  end
 
   # def handle_info({:echo, _data, _sender_pid}, state) do
   #   {:noreply, state}

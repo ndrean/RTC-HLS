@@ -52,7 +52,9 @@ defmodule RtcWeb.RoomLive do
 
     if connected?(socket) do
       Logger.info("LV connected --------#{socket.id}")
+      # presence
       subscribe("proxy:users")
+      # file_watcher for HLS ready
       subscribe("hls:m3u8")
       Presence.track_user(user_id, %{room_id: room_id})
     end
@@ -62,8 +64,6 @@ defmodule RtcWeb.RoomLive do
 
   @impl true
   def handle_params(%{"ex_room_id" => rid}, _uri, socket) do
-    IO.puts("PARAMS ROOM---------------")
-
     :created =
       Lobby.create_room(
         room_id: rid,
@@ -76,8 +76,6 @@ defmodule RtcWeb.RoomLive do
   end
 
   def handle_params(%{"echo" => echo}, _uri, socket) do
-    IO.puts("PARAMS ECHO-----------------")
-
     :created =
       Lobby.create_room(
         room_id: echo,
@@ -139,8 +137,6 @@ defmodule RtcWeb.RoomLive do
       |> File.ls!()
       |> Enum.member?("stream.m3u8")
 
-    IO.puts("first check for HLS....#{ready}")
-
     if ready do
       {:noreply, socket |> assign(:tab, "live") |> push_patch(to: ~p"/live_stream")}
     else
@@ -180,8 +176,6 @@ defmodule RtcWeb.RoomLive do
       )
 
     evision_streamer_pid = get_pid(evision_streamer_pid)
-
-    evision_streamer_pid |> dbg()
 
     {:noreply, assign(socket, tab: "evision", evision_streamer_pid: evision_streamer_pid)}
   end
