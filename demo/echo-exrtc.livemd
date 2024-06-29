@@ -38,10 +38,6 @@ graph LR;
 ### Server-side WebRTC module
 
 ```elixir
-Path.join(File.cwd!(), "/code/elixir")
-```
-
-```elixir
 
 defmodule RtcServer do
   use GenServer
