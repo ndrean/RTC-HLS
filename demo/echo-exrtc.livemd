@@ -24,9 +24,7 @@ These streams are forwarded via UDP and displayed in another `<video 2>` element
 
 ### Information flow
 
-1. The signaling process (instantiate the PeerConnection):
-
-<!-- livebook:{"break_markdown":true} -->
+* The signaling process (instantiate the PeerConnection):
 
 ```mermaid
 graph LR;
@@ -36,11 +34,7 @@ graph LR;
   L -- ws --> B1
 ```
 
-<!-- livebook:{"break_markdown":true} -->
-
-1. The active connection:
-
-<!-- livebook:{"break_markdown":true} -->
+* The active connection:
 
 ```mermaid
 graph LR;
