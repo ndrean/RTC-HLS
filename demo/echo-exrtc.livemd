@@ -400,3 +400,40 @@ The PeerConnection server-side is now populated:
 ```elixir
 RtcServer.peek_state()
 ```
+
+## Dockerfile Livebook
+
+Some packages are missing when you run the official image on Ubuntu.
+
+<!-- livebook:{"break_markdown":true} -->
+
+```Dockerfile
+FROM ghcr.io/livebook-dev/livebook:latest
+
+RUN apt update && apt upgrade -y && \
+    apt install pkg-config libssl-dev libsrtp2-dev -y && \
+    apt purge -y && apt clean -y && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /data
+ENV LIVEBOOK_HOME=/data
+ENV HOME=/home/livebook
+ENV LIVEBOOK_IP="::"
+
+
+HEALTHCHECK CMD wget --no-verbose --tries=1 --spider http://localhost:${LIVEBOOK_PORT-8080}/public/health || exit 1
+
+CMD ["/app/bin/server"]
+```
+
+<!-- livebook:{"break_markdown":true} -->
+
+```sh
+docker build . -t lvb:latest -f ./demo/Dockerfile
+```
+
+<!-- livebook:{"break_markdown":true} -->
+
+```sh
+docker run --rm -p 8080:8080 -p 8181:8181 lvb:latest
+```
