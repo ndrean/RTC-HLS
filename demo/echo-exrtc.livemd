@@ -236,8 +236,6 @@ RtcServer.peek_state()
 
 ### Client-side WebRTC module
 
-The signaling is via the WebSocket connection that exists in a Livebook between the browser and the server.
-
 On connection, a new `PeerConnection` is created. Since the server is already connected, the client will send an "offer" via the signaling channel. The client expects an "answer" back. It will also send "Ice" candidates via the signaling channel, and expects to receive Ice candidates from the server.
 
 Once the connection is set, the client will receive RTP packets and digest them into a `<video>` element.
@@ -334,7 +332,6 @@ defmodule VideoLive do
               console.log("--> Received remote track");
               const echo = document.querySelector("#echo");
               echo.srcObject = streams[0];
-              //echo.onlodadeddata = () => echo.play()
             };
 
             // received from the remote peer via signaling channel (Elixir server)
