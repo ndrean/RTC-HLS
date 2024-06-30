@@ -52,10 +52,10 @@ defmodule FFmpeger do
 
     cmd =
       ~w(#{ffmpeg} -loglevel debug -hide_banner -i pipe:0 -r 20 -c:v libx264 -hls_time 2 -hls_list_size 5 -hls_flags delete_segments+append_list -hls_playlist_type event  -hls_segment_filename #{segment_path} #{playlist_path})
-  
-  
+
+
     case opt do
-      :exile -> 
+      :exile ->
         {:ok, pid} = Exile.Process.start_link(cmd)
         {:ok, {pid, :exile}}
       :excmd ->
@@ -80,20 +80,20 @@ defmodule FFmpeger do
     {:reply, :processed, {pid, :exile}}
   end
 
-  
+
 
   def handle_call(:stop, _from, {pid, :exile}) do
-    IO.puts("stopping-----------------")
     :ok = Exile.Process.close_stdin(pid)
     {:ok, 0} = Exile.Process.await_exit(pid)
     {:stop, :shutdown, {pid, :exile}}
+    IO.puts("stopped-----------------")
   end
 
   def handle_call(:stop, _from, {pid, :excmd}) do
-    IO.puts("stopping-----------------")
      :ok = ExCmd.Process.close_stdin(pid)
      :eof = ExCmd.Process.read(pid)
      {:ok, 0} = ExCmd.Process.await_exit(pid)
+    IO.puts("stopped-----------------")
     {:stop, :shutdown, {pid, :excmd}}
   end
 end
@@ -101,13 +101,13 @@ end
 
 ### Webserver to handle POST requests
 
-We will run a (Cowboy) WebServer to listen on port 4002 to handle the data sent by the video stream. We run a multipart HTTP POST request every second to send the binary data packaged into a file to the endpoint http://localhost:4002/upload.
+We will run a (Bandit) WebServer to listen on port 4002 to handle the data sent by the video stream. We run a multipart HTTP POST request every second to send the binary data packaged into a file to the endpoint http://localhost:4002/upload.
 
 ```elixir
  defmodule PostRouter do
   use Plug.Router
 
-  plug Corsica, origins: "*", allow_methods: ["GET", "POST"]
+  plug Corsica, origins: "http://localhost:4000", allow_methods: ["GET", "POST"]
   plug(Plug.Parsers,
     parsers: [:urlencoded, :multipart],
     pass: ["*/*"]
@@ -123,7 +123,7 @@ We will run a (Cowboy) WebServer to listen on port 4002 to handle the data sent 
   get "/excmd" do
     send_resp(conn, 200, "hello from Bandit with excmd")
   end
-   
+
 
   post "/upload" do
     %{"file" => %Plug.Upload{path: path}} = conn.params
@@ -138,7 +138,7 @@ Start the weberser and the FFmpeg runner module. You can choose the process runn
 ```elixir
 webserver = {Bandit, plug: PostRouter, scheme: :http, port: 4002}
 
-Supervisor.start_link([webserver, {FFmpeger, :exile}], strategy: :one_for_one, name: MySup)
+Supervisor.start_link([webserver, {FFmpeger, :excmd}], strategy: :one_for_one, name: MySup)
 
 Supervisor.which_children(MySup)
 ```
@@ -150,7 +150,7 @@ ExCmd.stream!(~w(curl  http://localhost:4002/excmd)) |> Enum.into("")
 ```
 
 ```elixir
-Exile.stream!(~w(curl  http://localhost:4002/exile)) |> Enum.into("")
+#Exile.stream!(~w(curl  http://localhost:4002/exile)) |> Enum.into("")
 ```
 
 ### Launch the video stream
@@ -173,8 +173,8 @@ defmodule VideoLive do
       <button type="button" id="stop" phx-click="stop">Stop streaming</button>
     </div>
     """
-      
-      
+
+
   def new() do
     Kino.JS.Live.new(__MODULE__, @html)
   end
@@ -193,24 +193,24 @@ defmodule VideoLive do
     }
     """
   end
-  
+
   asset "main.js" do
     """
     export function init(ctx, html) {
       ctx.importCSS("main.css")
       ctx.root.innerHTML = html
-        
+
       function run() {
         navigator.mediaDevices.getUserMedia({video: {width: 400, height: 400}, audio: false})
         .then((stream)=> {
           let video = document.getElementById("video"),
             send = true;
-      
+
           document.getElementById("stop").onclick = () => {
               send = false;
               ctx.pushEvent("stop", {})
           }
-      
+
           video.srcObject = stream
           let mediaRecorder = new MediaRecorder(stream);
           mediaRecorder.ondataavailable = ({data}) => {
@@ -230,8 +230,8 @@ defmodule VideoLive do
           mediaRecorder.start(1000)
         })
       }
-  
-      run()      
+
+      run()
     }
     """
   end

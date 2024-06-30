@@ -16,8 +16,8 @@ defmodule Rtc.FFmpegStreamer do
     GenServer.start_link(__MODULE__, args, name: via(type, user_id))
   end
 
-  def get_data(%{type: type, user_id: user_id}) do
-    GenServer.call(via(type, user_id), :get_data)
+  def get_ffmpeg_pid(%{type: type, user_id: user_id}) do
+    GenServer.call(via(type, user_id), :get_ffmpeg_pid)
   end
 
   # def process_hls_path(%{type: type, user_id: user_id, file_path: path}) do
@@ -38,7 +38,7 @@ defmodule Rtc.FFmpegStreamer do
 
   def init(args) do
     IO.puts("FFmpegStreamer **************")
-    ffmpeg_os_path = Application.fetch_env!(:rtc, :ffmpeg) |> dbg()
+    ffmpeg_os_path = Application.fetch_env!(:rtc, :ffmpeg)
     hls_dir = Application.fetch_env!(:rtc, :hls)[:hls_dir]
     dash_dir = Application.fetch_env!(:rtc, :hls)[:dash_dir]
 
@@ -50,6 +50,7 @@ defmodule Rtc.FFmpegStreamer do
     hls_cmd =
       [
         ffmpeg_os_path,
+        ["-loglevel", "debug"],
         # Input from stdin (pipe)
         ["-i", "pipe:0"],
         # sets the input frame rate to 20 frames per second.
@@ -67,7 +68,6 @@ defmodule Rtc.FFmpegStreamer do
         ["-hls_playlist_type", "event"],
         # Segment file naming pattern
         ["-hls_segment_filename", segment_path],
-        ["-loglevel", "debug"],
         # Playlist file
         playlist_path
       ]
@@ -80,6 +80,7 @@ defmodule Rtc.FFmpegStreamer do
     dash_cmd =
       [
         ffmpeg_os_path,
+        ["-loglevel", "debug"],
         # Input from stdin
         ["-i", "-"],
         # Set the input frame rate to 20 fps
@@ -149,12 +150,15 @@ defmodule Rtc.FFmpegStreamer do
       end
       |> Map.merge(%{type: args[:type], queue: :queue.new()})
 
+    Process.link(state.ffmpeg_pid)
+
     {:ok, state}
   end
 
   # for test only echo, called by test controller
-  def handle_call(:get_data, _from, state) do
-    {:reply, state.data, state}
+  def handle_call(:get_ffmpeg_pid, from, state) do
+    dbg(from)
+    {:reply, state.ffmpeg_pid, state}
   end
 
   def handle_call(:pid, _from, state) do
@@ -164,6 +168,10 @@ defmodule Rtc.FFmpegStreamer do
   def handle_call({:enqueue_path, type, path}, _, state) do
     send(self(), {type, path})
     {:reply, :enqueued, state}
+  end
+
+  def handle_info(:ffmpeg_pid, state) do
+    {:noreply, state}
   end
 
   def handle_info({"frame", frame}, state) do

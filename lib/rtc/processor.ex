@@ -1,7 +1,7 @@
 defmodule Rtc.ProcessorAgent do
   use Agent
   alias Evision, as: Cv
-  alias Evision.CascadeClassifier
+  alias Cv.CascadeClassifier
 
   @moduledoc """
   Agent to load and hold the Haar Cascade model for the processor.

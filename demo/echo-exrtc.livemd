@@ -12,13 +12,13 @@ Mix.install([
 
 The webcam is captured and displayed in a first `<video>` element.
 
-The browser and the Elixir SFU will establish a WebRTC PeerConnection (UDP).
+The browser and the Elixir SFU will establish a WebRTC PeerConnection via a signaling channel: the Livebook WebSocket.
 
-The signaling uses the Livebook WebSocket to exchange SDP and ICE candidates.
+They will exchange SDP and ICE candidates.
 
-Once connected, the Elixir SFU will receive the streams from the `<video 1>`. In this Echo configuration, it will send back the streams to the connected peer.
+Once connected, the Elixir SFU will receive the streams from the `<video 1>` via a UDP connection. In this Echo configuration, it will send back the streams to the connected peer.
 
-These streams are displayed in another `<video 2>` element.
+These streams are forwarded via UDP and displayed in another `<video 2>` element.
 
 <!-- livebook:{"break_markdown":true} -->
 
@@ -73,7 +73,7 @@ defmodule RtcServer do
   def init(_args) do
     Logger.info("ExRtc PeerConnection started")
 
-    
+
     {:ok, %{
       sender: nil,
       pc: nil,
@@ -155,15 +155,15 @@ defmodule RtcServer do
         %{client_video_track: %{id: client_track_id, kind: :video}} = state
       ) do
     PeerConnection.send_rtp(pc, state.serv_video_track.id, packet)
-   
+
     state = handle_paquet(packet, state)
-        
+
     {:noreply, state}
   end
 
   def handle_info({:ex_webrtc, pc, {:connection_state_change, :connected}}, state) do
     sdp = PeerConnection.get_remote_description(pc).sdp
-    [codec, _] = 
+    [codec, _] =
       Regex.scan(~r/a=rtpmap:([a-zA-Z0-9\s]+)/, sdp) |> List.first()
 
     Logger.warning("PeerConnection successfully connected, using #{inspect(codec)}")
@@ -178,7 +178,7 @@ defmodule RtcServer do
     case Depayloader.write(state.video_depayloader, packet) do
         {:ok, d} ->
           %{state | video_depayloader: d}
-          
+
 
         {:ok, frame, d} ->
           # we measure around 30pfs
@@ -192,7 +192,7 @@ defmodule RtcServer do
           else
             %{ state | video_depayloader: d, i: n}
           end
-          
+
     end
   end
 
@@ -218,7 +218,7 @@ and instantiate a new PeerConnection:
 RtcServer.connect()
 ```
 
-This will instantiate a `ExWebRTC.PeerConnection` server-side. 
+This will instantiate a `ExWebRTC.PeerConnection` server-side.
 It is waiting for a peer to connect and receive its offer. It will respond with an "answer", digest the peer's Ice candidates, and send to the peer its own ICE candidates.
 
 ```elixir
@@ -237,7 +237,7 @@ Once the connection is set, the client will receive RTP packets and digest them 
 
 defmodule VideoLive do
   # GenServer to communicate between browser and Livebook server
-  
+
   use Kino.JS
   use Kino.JS.Live
 
@@ -301,13 +301,13 @@ defmodule VideoLive do
             videoIn.srcObject = stream;
 
             const pc = new RTCPeerConnection(iceConf);
-    
+
             // capture local MediaStream (from the webcam)
             const tracks = stream.getTracks();
             tracks.forEach((track) => pc.addTrack(track, stream));
 
             // send offer to any peer connected on the signaling channel
-            pc.onicecandidate = ({candidate}) => { 
+            pc.onicecandidate = ({candidate}) => {
               if (candidate === null) { return};
               ctx.pushEvent("ice", { candidate: candidate.toJSON(), type: "ice" });
             };
@@ -365,7 +365,7 @@ defmodule VideoLive do
     RtcServer.receive_signaling_msg({sdp, self()})
     {:noreply, ctx}
   end
-  
+
   def handle_event("ice",%{"candidate" => candidate}, ctx) do
     RtcServer.receive_signaling_msg({%{"type" => "ice", "candidate" => candidate}, self()})
     {:noreply, ctx}

@@ -11,13 +11,22 @@ defmodule Rtc.RoomEcho do
 
   require Logger
 
-  alias ExWebRTC.{ICECandidate, PeerConnection, SessionDescription, MediaStreamTrack}
-  alias ExWebRTC.RTP.VP8Depayloader
+  alias Rtc.FFmpegStreamer
+  alias ExWebRTC.{ICECandidate, PeerConnection, RTPCodecParameters, SessionDescription, MediaStreamTrack}
+  alias ExWebRTC.RTP.VP8.Depayloader
 
   @ice_servers [
     %{urls: "stun:stun.l.google.com:19302"},
     %{urls: "stun:stun.l.google.com:5349"},
     %{urls: "stun:stun1.l.google.com:3478"}
+  ]
+
+  @video_codecs [
+    %RTPCodecParameters{
+      payload_type: 96,
+      mime_type: "video/VP8",
+      clock_rate: 90_000
+    }
   ]
 
   defp id(room_id), do: {:via, Registry, {Rtc.Reg, room_id}}
@@ -31,6 +40,8 @@ defmodule Rtc.RoomEcho do
         log: true
       )
   end
+
+  :monotonic_time |> IO.inspect(label: "monotonic_time")
 
   def start_link(args) do
     rid = Keyword.get(args, :room_id)
@@ -55,9 +66,10 @@ defmodule Rtc.RoomEcho do
     uid = Keyword.get(args, :user_id)
 
     Logger.debug("Starting Room:#{rid} GS, #{inspect(self())}")
-
-    {:ok, ffmpeg} = set_ffmpeg()
-    Process.monitor(ffmpeg)
+    ffmpeg_pid = FFmpegStreamer.get_ffmpeg_pid(%{user_id: uid, type: "echo"})
+    Process.link(ffmpeg_pid)
+    # {:ok, ffmpeg} = set_ffmpeg()
+    # Process.monitor(ffmpeg)
 
     {:ok,
      %{
@@ -69,30 +81,34 @@ defmodule Rtc.RoomEcho do
        channel: nil,
        client_video_track: nil,
        client_audio_track: nil,
-       video_depayloader: VP8Depayloader.new(),
+       video_depayloader: Depayloader.new(),
+      #  video_decoder: Xav.Decoder.new(:vp8),
        i: 1,
-       ffmpeg: ffmpeg
-     }, {:continue, :init_streamer}}
+       t: System.monotonic_time(:microsecond),
+        ffmpeg: ffmpeg_pid
+      }}
   end
 
   @impl true
   # caoont start a GenServer from a GenServer!
-  def handle_continue(:init_streamer, state) do
-    # {:ok, pid} =
-    #   DynamicSupervisor.start_child(
-    #     Rtc.DynSup,
-    #     {Rtc.FFmpegStreamer, [type: "echo", user_id: state.user_id]}
-    #   )
+  # def handle_continue(:init_streamer, state) do
+  #   {:ok, pid} =
+  #     DynamicSupervisor.start_child(
+  #       Rtc.DynSup,
+  #       {Rtc.FFmpegStreamer, [type: "echo", user_id: state.user_id]}
+  #     )
 
-    # Process.link(pid)
-    # {:noreply, %{state | streamer: pid}}
-    {:noreply, state}
-  end
+  #   Process.link(pid)
+  #   ffmpeg_pid = FFmpegStreamer.get_ffmpeg_pid(%{user_id: state.user_id, type: "echo"})
+  #   dbg(ffmpeg_pid)
+
+  #   {:noreply, Map.put(state, :ffmpeg, ffmpeg_pid)}
+  # end
 
   @impl true
   def handle_call({:connect, channel_pid, user_id}, _from, state) do
     Process.monitor(channel_pid)
-    {:ok, pc} = PeerConnection.start_link(ice_servers: @ice_servers)
+    {:ok, pc} = PeerConnection.start_link(ice_servers: @ice_servers, video_codecs: @video_codecs)
 
     # direction: :sendrecv since we receive tracks from client and send them back
     new_tracks = setup_transceivers(pc)
@@ -196,7 +212,7 @@ defmodule Rtc.RoomEcho do
   # We send these packets to the PeerConnection under the server audio track id.
 
   def handle_info(
-        {:ex_webrtc, pc, {:rtp, client_track_id, packet}},
+        {:ex_webrtc, pc, {:rtp, client_track_id, _, packet}},
         %{client_audio_track: %{id: client_track_id, kind: :audio}} = state
       ) do
     PeerConnection.send_rtp(pc, state.serv_audio_track.id, packet)
@@ -204,7 +220,7 @@ defmodule Rtc.RoomEcho do
   end
 
   def handle_info(
-        {:ex_webrtc, pc, {:rtp, client_track_id, packet}},
+        {:ex_webrtc, pc, {:rtp, client_track_id, _, packet}},
         %{client_video_track: %{id: client_track_id, kind: :video}} = state
       ) do
     PeerConnection.send_rtp(pc, state.serv_video_track.id, packet)
@@ -246,24 +262,18 @@ defmodule Rtc.RoomEcho do
   defp handle_paquet(packet, state) do
     %{i: i, lv_pid: lv_pid, ffmpeg: ffmpeg} = state
 
-    case VP8Depayloader.write(state.video_depayloader, packet) do
+    case Depayloader.write(state.video_depayloader, packet) do
       {:ok, d} ->
         %{state | video_depayloader: d}
 
       {:ok, frame, d} ->
         n = i + 1
 
-        if Integer.mod(n, 20) == 0 do
-          Logger.debug(%{count: i, size: byte_size(frame)})
-
-          # ExCmd.stream!(
-          #   ~w(ffmpeg -i pipe:0 -vframes 1 -q:v 2 -f image2 /Users/nevendrean/code/elixir/RTC-HLS/test.jpg),
-          #   input: frame
-          # )
-          # # |> Stream.into(File.stream!("/Users/nevendrean/code/elixir/RTC-HLS/test.jpg"))
-          # |> Stream.run()
-
-          ExCmd.Process.write(ffmpeg, frame)
+        if Integer.mod(n, 100) == 0 do
+          Logger.debug(%{count: i, size: round(byte_size(frame) * 8 / 1000)})
+          File.write("/Users/nevendrean/code/elixir/RTC-HLS/frame.vp8", frame)
+          :ok = ExCmd.Process.write(ffmpeg, frame)
+          # Xav.Decorder.decode(state.video_decoder, frame) |> dbg()
 
           # |> then(fn data -> send(lv_pid, {:echo, data, n}) end)
         end
@@ -285,9 +295,9 @@ defmodule Rtc.RoomEcho do
   end
 
   defp setup_transceivers(pc) do
-    video = MediaStreamTrack.new(:video)
-    audio = MediaStreamTrack.new(:audio)
-    # media_stream_id = MediaStreamTrack.generate_stream_id()
+    media_stream_id = MediaStreamTrack.generate_stream_id()
+    video = MediaStreamTrack.new(:video, [media_stream_id])
+    audio = MediaStreamTrack.new(:audio, [media_stream_id])
     {:ok, _sender} = PeerConnection.add_track(pc, video)
     {:ok, _sender} = PeerConnection.add_track(pc, audio)
 

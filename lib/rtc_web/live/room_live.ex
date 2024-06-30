@@ -47,7 +47,8 @@ defmodule RtcWeb.RoomLive do
         hls_streamer_pid: nil,
         face_streamer_pid: nil,
         frame_streamer_pid: nil,
-        evision_streamer_pid: nil
+        evision_streamer_pid: nil,
+        echo_streamer_pid: nil
       })
 
     if connected?(socket) do
@@ -131,6 +132,11 @@ defmodule RtcWeb.RoomLive do
   # event: JS.push "switch" in "tab_selector". It is a "patch" navigate
   # maybe starts FFmpeg streamer and sets the tab to navigate to
   def handle_event("switch", %{"tab" => "live"}, socket) do
+    case DynamicSupervisor.which_children(Rtc.DynSup) do
+      [] -> :ok
+      [{_, pid, _, _}] -> DynamicSupervisor.terminate_child(Rtc.DynSup, pid)
+    end
+
     # can't go there is no playlist available
     ready =
       Application.fetch_env!(:rtc, :hls)[:hls_dir]
@@ -145,6 +151,11 @@ defmodule RtcWeb.RoomLive do
   end
 
   def handle_event("switch", %{"tab" => "hls"}, socket) do
+    case DynamicSupervisor.which_children(Rtc.DynSup) do
+      [] -> :ok
+      [{_, pid, _, _}] -> DynamicSupervisor.terminate_child(Rtc.DynSup, pid)
+    end
+
     hls_streamer_pid =
       DynamicSupervisor.start_child(
         Rtc.DynSup,
@@ -157,6 +168,11 @@ defmodule RtcWeb.RoomLive do
   end
 
   def handle_event("switch", %{"tab" => "face"}, socket) do
+    case DynamicSupervisor.which_children(Rtc.DynSup) do
+      [] -> :ok
+      [{_, pid, _, _}] -> DynamicSupervisor.terminate_child(Rtc.DynSup, pid)
+    end
+
     face_streamer_pid =
       DynamicSupervisor.start_child(
         Rtc.DynSup,
@@ -169,6 +185,11 @@ defmodule RtcWeb.RoomLive do
   end
 
   def handle_event("switch", %{"tab" => "evision"}, socket) do
+    case DynamicSupervisor.which_children(Rtc.DynSup) do
+      [] -> :ok
+      [{_, pid, _, _}] -> DynamicSupervisor.terminate_child(Rtc.DynSup, pid)
+    end
+
     evision_streamer_pid =
       DynamicSupervisor.start_child(
         Rtc.DynSup,
@@ -178,6 +199,23 @@ defmodule RtcWeb.RoomLive do
     evision_streamer_pid = get_pid(evision_streamer_pid)
 
     {:noreply, assign(socket, tab: "evision", evision_streamer_pid: evision_streamer_pid)}
+  end
+
+  def handle_event("switch", %{"tab" => "echo"}, socket) do
+    case DynamicSupervisor.which_children(Rtc.DynSup) do
+      [] -> :ok
+      [{_, pid, _, _}] -> DynamicSupervisor.terminate_child(Rtc.DynSup, pid)
+    end
+
+    echo_streamer_pid =
+      DynamicSupervisor.start_child(
+        Rtc.DynSup,
+        {FFmpegStreamer, [type: "echo", user_id: socket.assigns.user_id]}
+      )
+
+    echo_streamer_pid = get_pid(echo_streamer_pid)
+
+    {:noreply, assign(socket, tab: "echo", echo_streamer_pid: echo_streamer_pid)}
   end
 
   def handle_event("switch", %{"tab" => tab}, socket) do
@@ -340,7 +378,7 @@ defmodule RtcWeb.RoomLive do
           :if={@tab == "frame"}
           action={JS.patch("/frame")}
           link_text="Play your webcam"
-          inner_text="10 frame/s are captured from the webcam and pushed to the server. We run a face recognition and make the streams available for HTTP Live Streaming."
+          inner_text="10 frame/s are captured from the webcam and pushed to the server via a channel. We run a face recognition and make the streams available for HTTP Live Streaming."
         />
         <%!-- use "navigate" for Presence to change to room "self" --%>
         <Navigate.display_tab
