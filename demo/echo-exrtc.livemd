@@ -22,15 +22,30 @@ These streams are forwarded via UDP and displayed in another `<video 2>` element
 
 <!-- livebook:{"break_markdown":true} -->
 
+### Information flow
+
+1. The signaling process (instantiate the PeerConnection):
+
+<!-- livebook:{"break_markdown":true} -->
+
 ```mermaid
 graph LR;
-  B1[Browser <br> PeerConnection]-.->L[Livebook];
-  L-.->Ex[Elixir SFU <br> PeerConnection];
-  Ex -.-> L
-  L -.-> B1
+  B1[Browser <br> PeerConnection]-- ws-->L[Livebook];
+  L-- ws -->Ex[Elixir SFU <br> PeerConnection];
+  Ex -- ws --> L
+  L -- ws --> B1
+```
 
-  B3[video 1]--stream -->ExSFU[Elixir SFU]
-  ExSFU --stream -->B4[video 2];
+<!-- livebook:{"break_markdown":true} -->
+
+1. The active connection:
+
+<!-- livebook:{"break_markdown":true} -->
+
+```mermaid
+graph LR;
+  B3[video 1]--stream <br> UDP -->ExSFU[Elixir SFU]
+  ExSFU --stream <br> UPD-->B4[video 2];
 ```
 
 <!-- livebook:{"break_markdown":true} -->
