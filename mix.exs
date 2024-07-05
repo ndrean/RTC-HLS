@@ -19,7 +19,7 @@ defmodule Rtc.MixProject do
   def application do
     [
       mod: {Rtc.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger, :runtime_tools, :wx, :observer]
     ]
   end
 
@@ -42,12 +42,13 @@ defmodule Rtc.MixProject do
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.2"},
       {:file_system, "~> 1.0"},
+      {:porcelain, "~> 2.0"},
       {:ex_cmd, "~> 0.12"},
+      {:vix, "~> 0.27.0"},
+      {:image, "~> 0.5"},
       {:ex_webrtc, "~> 0.3"},
       {:ex_webrtc_dashboard, "~> 0.3"},
-      {:vix, "~> 0.27.0"},
       {:xav, path: "../xav"},
-      # {:xav, "∞> 0.3"},
       {:nx, "~> 0.7"},
       {:bumblebee, "~>0.5"},
       {:evision, "~> 0.2"},

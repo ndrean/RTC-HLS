@@ -1,6 +1,8 @@
 defmodule Rtc.FFmpegStreamer do
   use GenServer, restart: :transient
 
+  alias Rtc.Env
+
   @moduledoc """
   Spawn a GenServer to handle the HLS and DASH streaming via FFMPEG transcoding.
 
@@ -20,17 +22,9 @@ defmodule Rtc.FFmpegStreamer do
     GenServer.call(via(type, user_id), :get_ffmpeg_pid)
   end
 
-  # def process_hls_path(%{type: type, user_id: user_id, file_path: path}) do
-  #   GenServer.call(via(type, user_id), {:process_hls_path, path})
-  # end
-
   def enqueue_path(%{type: type, user_id: user_id, path: path}) do
     GenServer.call(via(type, user_id), {:enqueue_path, type, path})
   end
-
-  # def process_frame_path(%{type: type, user_id: user_id, frame_path: frame_path}) do
-  #   GenServer.call(via(type, user_id), {:process_frame_path, frame_path})
-  # end
 
   def pid(%{type: type, user_id: user_id}) do
     GenServer.call(via(type, user_id), :pid)
@@ -38,14 +32,12 @@ defmodule Rtc.FFmpegStreamer do
 
   def init(args) do
     IO.puts("FFmpegStreamer **************")
-    ffmpeg_os_path = Application.fetch_env!(:rtc, :ffmpeg)
-    hls_dir = Application.fetch_env!(:rtc, :hls)[:hls_dir]
-    dash_dir = Application.fetch_env!(:rtc, :hls)[:dash_dir]
+    ffmpeg_os_path = Env.ffmpeg()
 
-    playlist_path = Path.join(hls_dir, "stream.m3u8")
-    segment_path = Path.join(hls_dir, "segment_%03d.ts")
+    playlist_path = Path.join(Env.hls_dir(), "stream.m3u8")
+    segment_path = Path.join(Env.hls_dir(), "segment_%03d.ts")
 
-    fps = Application.get_env(:rtc, :fps)
+    fps = Env.fps()
 
     hls_cmd =
       [
@@ -75,7 +67,7 @@ defmodule Rtc.FFmpegStreamer do
 
     # "-loglevel","warning"
 
-    dash_path = dash_dir <> "stream.mpd"
+    dash_path = Path.join(Env.dash_dir(), "stream.mpd")
 
     dash_cmd =
       [
@@ -107,27 +99,30 @@ defmodule Rtc.FFmpegStreamer do
       ]
       |> List.flatten()
 
-    echo_cmd =
-      [
-        ffmpeg_os_path,
-        ["-loglevel", "debug"],
-        # Input from stdin
-        ["-i", "-"],
-        # Capture only the first frame
-        ["-vframes", "1"],
-        # Output format as an image pipe
-        ["-f", "image2pipe"],
-        # Use MJPEG codec for output
-        ["-vcodec", "mjpeg"],
-        # Overwrite output files without asking
-        "-y",
-        # Output to stdout
-        "pipe:1"
-      ]
-      |> List.flatten()
+    ffmpeg_os_path = "/opt/homebrew/Cellar/ffmpeg/7.0-with-options_1/bin/ffmpeg"
+
+    # echo_cmd = ~w(#{ffmpeg_os_path} -r #{fps}  -s 600x320 -i pipe:0 -c:v copy -f webm demo/test.webm )
+    echo_cmd = ~w(#{ffmpeg_os_path} -f ivf  -i pipe:0 -c:v copy -f ivf -y demo/output.ivf)
+    # [
+    #   ffmpeg_os_path,
+    #   ["-loglevel", "debug"],
+    #   # Input from stdin
+    #   ["-i", "-"],
+    #   # Capture only the first frame
+    #   ["-vframes", "1"],
+    #   # Output format as an image pipe
+    #   ["-f", "image2pipe"],
+    #   # Use MJPEG codec for output
+    #   ["-vcodec", "mjpeg"],
+    #   # Overwrite output files without asking
+    #   "-y",
+    #   # Output to stdout
+    #   "pipe:1"
+    # ]
+    # |> List.flatten()
 
     _evision_cmd =
-      ~w(#{ffmpeg_os_path} -i - -f image2pipe -framerate 25 -c:v libx264 -pix_fmt yuv420p output.mp4)
+      ~w(#{ffmpeg_os_path}  -loglevel debug -i - -f image2pipe -framerate 25 -c:v libx264 -pix_fmt yuv420p output.mp4)
 
     state =
       cond do
@@ -140,12 +135,12 @@ defmodule Rtc.FFmpegStreamer do
           %{}
 
         args[:type] == "dash" ->
-          {:ok, ffmpeg_pid} = ExCmd.Process.start_link(dash_cmd) |> dbg()
+          {:ok, ffmpeg_pid} = ExCmd.Process.start_link(dash_cmd)
 
           %{ffmpeg_pid: ffmpeg_pid}
 
         args[:type] in ["frame", "echo"] ->
-          {:ok, ffmpeg_pid} = ExCmd.Process.start_link(echo_cmd)
+          {:ok, ffmpeg_pid} = ExCmd.Process.start_link(echo_cmd, log: true)
           %{ffmpeg_pid: ffmpeg_pid}
       end
       |> Map.merge(%{type: args[:type], queue: :queue.new()})
@@ -157,7 +152,6 @@ defmodule Rtc.FFmpegStreamer do
 
   # for test only echo, called by test controller
   def handle_call(:get_ffmpeg_pid, from, state) do
-    dbg(from)
     {:reply, state.ffmpeg_pid, state}
   end
 

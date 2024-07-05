@@ -1,0 +1,82 @@
+<div id="elt">
+  <button type="button" id="file-proc">
+    Save video into files of frames via Process
+  </button>
+  <br />
+  <button type="button" disabled id="file-stream">
+    Save video into files of frames via Stream
+  </button>
+  <br />
+  <button type="button" id="stop">STOP</button>
+  <br />
+  <figure>
+    <video
+      id="source"
+      width="640"
+      height="480"
+      muted
+      autoplay
+      playsinline
+    ></video>
+    <figcaption>Source</figcaption>
+  </figure>
+  <br />
+  <figure>
+    <video
+      id="output"
+      width="640"
+      height="480"
+      muted
+      autoplay
+      playsinline
+      controls
+      type='video/webm; codecs="vp8, vorbis"'
+    ></video>
+    <figcaption>Modified image</figcaption>
+  </figure>
+</div>
+<script type="text/javascript">
+  let video1 = document.getElementById("source");
+  let video2 = document.getElementById("output");
+  let fileProc = document.getElementById("file-proc");
+  let fileStream = document.getElementById("file-stream");
+  let stop = document.getElementById("stop");
+
+  let socket = new WebSocket("ws://localhost:4000/socket");
+
+  navigator.mediaDevices
+    .getUserMedia({ video: { width: 640, height: 480 }, audio: false })
+    .then((stream) => {
+      video1.srcObject = stream;
+      let mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = async ({ data }) => {
+        if (data.size > 0) {
+          console.log(data.size);
+          const buffer = await data.arrayBuffer();
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(buffer);
+          }
+        }
+      };
+
+      socket.onmessage = ({ data }) => {
+        console.log(data);
+        //const blob = new Blob([data], {type: "video/webm"});
+        //video2.src = URL.createObjectURL(blob);
+      };
+
+      fileProc.onclick = () => {
+        socket.send("file-proc");
+        mediaRecorder.start(1_000);
+      };
+      fileStream.onclick = () => {
+        socket.send("file-stream");
+        mediaRecorder.start(1_000);
+      };
+
+      stop.onclick = () => {
+        mediaRecorder.stop();
+        socket.send("stop");
+      };
+    });
+</script>

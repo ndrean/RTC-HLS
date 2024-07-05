@@ -19,8 +19,11 @@ defmodule Rtc.FileCleaner do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  defp hls_path(), do: Application.get_env(:rtc, :hls)[:hls_dir]
-  defp dash_path(), do: Application.get_env(:rtc, :hls)[:dash_dir]
+  defp hls_path(),
+    do: Application.get_env(:rtc, :hls)[:hls_dir]
+
+  defp dash_path(),
+    do: Application.get_env(:rtc, :hls)[:dash_dir]
 
   def run(), do: GenServer.cast(__MODULE__, :clean)
 

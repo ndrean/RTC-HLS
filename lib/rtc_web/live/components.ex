@@ -242,6 +242,8 @@ defmodule RtcWeb.Videos do
         <video id="ex-remote" class="w-full h-full object-cover rounded-lg" />
         <video
           id="ex-local"
+          autoplay
+          playsinline
           class="absolute top-2 right-2 w-1/4 h-1/4 object-cover border-2 border-white rounded-lg shadow-md cursor-move"
         />
       </figure>

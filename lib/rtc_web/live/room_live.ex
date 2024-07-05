@@ -6,10 +6,13 @@ defmodule RtcWeb.RoomLive do
 
   require Logger
 
+  alias Rtc.Env
   alias Rtc.Lobby
   alias Rtc.FFmpegStreamer
   alias RtcWeb.Presence
-  alias RtcWeb.{Header, Videos, Navigate, UsersInRoom, Videos, RoomForm}
+
+  alias Rtc.DynSup,
+        alias(RtcWeb.{Header, Videos, Navigate, UsersInRoom, Videos, RoomForm})
 
   on_mount {RtcWeb.RoomLiveAuth, :rooms}
 
@@ -17,11 +20,19 @@ defmodule RtcWeb.RoomLive do
     :ok = Phoenix.PubSub.subscribe(Rtc.PubSub, topic)
   end
 
-  defp get_pid(ref) do
-    case ref do
-      {:ok, pid} -> pid
-      {:error, {:already_started, pid}} -> pid
+  # when the user does not naivgate to the action and the process has been started
+  defp reset_processes do
+    case DynamicSupervisor.which_children(DynSup) do
+      [] ->
+        :ok
+
+      list ->
+        for {_, pid, _, _} <- list, do: DynamicSupervisor.terminate_child(DynSup, pid)
     end
+  end
+
+  defp supervise(process: process, type: type, for: user_id) do
+    {:ok, _pid} = DynamicSupervisor.start_child(DynSup, {process, [type: type, user_id: user_id]})
   end
 
   @impl true
@@ -88,9 +99,7 @@ defmodule RtcWeb.RoomLive do
     {:noreply, assign(socket, :live_action, :echo)}
   end
 
-  def handle_params(_p, _uri, socket) do
-    {:noreply, socket}
-  end
+  def handle_params(_p, _uri, socket), do: {:noreply, socket}
 
   # Callbacks from client -----------------------------
 
@@ -132,14 +141,11 @@ defmodule RtcWeb.RoomLive do
   # event: JS.push "switch" in "tab_selector". It is a "patch" navigate
   # maybe starts FFmpeg streamer and sets the tab to navigate to
   def handle_event("switch", %{"tab" => "live"}, socket) do
-    case DynamicSupervisor.which_children(Rtc.DynSup) do
-      [] -> :ok
-      [{_, pid, _, _}] -> DynamicSupervisor.terminate_child(Rtc.DynSup, pid)
-    end
+    reset_processes()
 
     # can't go there is no playlist available
     ready =
-      Application.fetch_env!(:rtc, :hls)[:hls_dir]
+      Env.hls_dir()
       |> File.ls!()
       |> Enum.member?("stream.m3u8")
 
@@ -151,69 +157,37 @@ defmodule RtcWeb.RoomLive do
   end
 
   def handle_event("switch", %{"tab" => "hls"}, socket) do
-    case DynamicSupervisor.which_children(Rtc.DynSup) do
-      [] -> :ok
-      [{_, pid, _, _}] -> DynamicSupervisor.terminate_child(Rtc.DynSup, pid)
-    end
+    reset_processes()
 
-    hls_streamer_pid =
-      DynamicSupervisor.start_child(
-        Rtc.DynSup,
-        {FFmpegStreamer, [type: "hls", user_id: socket.assigns.user_id]}
-      )
-
-    hls_streamer_pid = get_pid(hls_streamer_pid)
+    {:ok, hls_streamer_pid} =
+      supervise(process: FFmpegStreamer, type: "hls", for: socket.assigns.user_id)
 
     {:noreply, assign(socket, tab: "hls", hls_streamer_pid: hls_streamer_pid)}
   end
 
   def handle_event("switch", %{"tab" => "face"}, socket) do
-    case DynamicSupervisor.which_children(Rtc.DynSup) do
-      [] -> :ok
-      [{_, pid, _, _}] -> DynamicSupervisor.terminate_child(Rtc.DynSup, pid)
-    end
+    reset_processes()
 
-    face_streamer_pid =
-      DynamicSupervisor.start_child(
-        Rtc.DynSup,
-        {FFmpegStreamer, [type: "face", user_id: socket.assigns.user_id]}
-      )
-
-    face_streamer_pid = get_pid(face_streamer_pid)
+    {:ok, face_streamer_pid} =
+      supervise(process: FFmpegStreamer, type: "face", for: socket.assigns.user_id)
 
     {:noreply, assign(socket, tab: "face", face_streamer_pid: face_streamer_pid)}
   end
 
   def handle_event("switch", %{"tab" => "evision"}, socket) do
-    case DynamicSupervisor.which_children(Rtc.DynSup) do
-      [] -> :ok
-      [{_, pid, _, _}] -> DynamicSupervisor.terminate_child(Rtc.DynSup, pid)
-    end
+    reset_processes()
 
     evision_streamer_pid =
-      DynamicSupervisor.start_child(
-        Rtc.DynSup,
-        {Rtc.ProcessorAgent, [type: "evision", user_id: socket.assigns.user_id]}
-      )
-
-    evision_streamer_pid = get_pid(evision_streamer_pid)
+      supervise(process: Rtc.ProcessorAgent, type: "evision", for: socket.assigns.user_id)
 
     {:noreply, assign(socket, tab: "evision", evision_streamer_pid: evision_streamer_pid)}
   end
 
   def handle_event("switch", %{"tab" => "echo"}, socket) do
-    case DynamicSupervisor.which_children(Rtc.DynSup) do
-      [] -> :ok
-      [{_, pid, _, _}] -> DynamicSupervisor.terminate_child(Rtc.DynSup, pid)
-    end
+    reset_processes()
 
-    echo_streamer_pid =
-      DynamicSupervisor.start_child(
-        Rtc.DynSup,
-        {FFmpegStreamer, [type: "echo", user_id: socket.assigns.user_id]}
-      )
-
-    echo_streamer_pid = get_pid(echo_streamer_pid)
+    {:ok, echo_streamer_pid} =
+      supervise(process: FFmpegStreamer, type: "echo", for: socket.assigns.user_id)
 
     {:noreply, assign(socket, tab: "echo", echo_streamer_pid: echo_streamer_pid)}
   end
@@ -268,11 +242,13 @@ defmodule RtcWeb.RoomLive do
 
   def handle_event("start-evision", _, %{assigns: %{evision_streamer_pid: pid}} = socket)
       when not is_nil(pid) do
-    Rtc.Processor.process_video()
+    IO.puts("START Evision ************")
+    # Rtc.Processor.process_video()
     {:noreply, socket}
   end
 
   # callbacks from the process -------------------------
+
   @impl true
   # fliewatcher messages -------------------------------
   def handle_info(:playlist_ready, %{assigns: %{playlist_ready: true}} = socket) do
@@ -325,7 +301,7 @@ defmodule RtcWeb.RoomLive do
     }
   end
 
-  # TEST ECHO
+  # TEST ECHO - TO REMOVE
   def handle_info({:img, _data, i}, socket) do
     dbg(i)
     {:noreply, socket}
@@ -437,7 +413,13 @@ defmodule RtcWeb.RoomLive do
 
   def render(assigns) when assigns.live_action == :evision do
     ~H"""
-    <section id="echo-view" data-user-id={@user_id} data-module="evision" phx-hook="echo_evision">
+    <section
+      id="echo-view"
+      data-user-id={@user_id}
+      data-module="evision"
+      phx-hook="echo_evision"
+      phx-update="ignore"
+    >
       <Header.display
         header="Echo Evision from server"
         id={@id}

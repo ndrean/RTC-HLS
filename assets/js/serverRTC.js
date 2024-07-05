@@ -112,7 +112,7 @@ const serverRTC = {
     this.pc.onicecandidate = (event) => {
       if (event.candidate) {
         rtc.channel.push("ice", {
-          candidate: event.candidate,
+          candidate: event.candidate.toJSON(),
           type: "ice",
           from: userId,
         });

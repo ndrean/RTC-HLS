@@ -10,11 +10,12 @@ import Config
 config :rtc,
   generators: [timestamp_type: :utc_datetime]
 
-# config :porcelain, driver: Porcelain.Driver.Basic
 config :nx, :default_backend, EXLA.Backend
 
 config :rtc, :ffmpeg, System.find_executable("FFMPEG")
 config :rtc, :fps, System.get_env("FPS")
+
+config :porcelain, driver: Porcelain.Driver.Basic
 
 config :rtc, :hls,
   dash_dir: System.get_env("DASH_DIR"),

@@ -23,6 +23,10 @@ defmodule RtcWeb.Endpoint do
     websocket: [check_origin: true, connect_info: [:peer_data, session: @session_options]],
     longpoll: false
 
+  socket "/echo", RtcWeb.EchoSocket,
+    websocket: [connect_info: [session: @session_options]],
+    longpoll: false
+
   # Serve at "/" the static files from "priv/static" directory.
   #
   # You should set gzip to true if you are running phx.digest

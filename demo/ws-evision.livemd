@@ -1,0 +1,215 @@
+# Untitled notebook
+
+```elixir
+Mix.install([
+  {:evision, "~> 0.2.5"},
+  {:ex_cmd, "~> 0.12.0"},
+  {:kino, "~> 0.13.1"},
+])
+```
+
+## Section
+
+### Constants
+
+```elixir
+defmodule Constants do
+  def ffmpeg_path do
+    "/opt/homebrew/Cellar/ffmpeg/7.0-with-options_1/bin/ffmpeg"
+  end
+
+  def haar do
+    haar_path = 
+      Path.join(
+        :code.priv_dir(:evision),
+        "share/opencv4/haarcascades/haarcascade_frontalface_default.xml"
+      )
+          
+    Evision.CascadeClassifier.cascadeClassifier(haar_path)
+  end
+end
+```
+
+A folder to collect the temp files we will produce
+
+```elixir
+File.mkdir("pics")
+```
+
+A module to render a `<video>` and 3 actions buttons: "to file" to save every frame into a file, "to buffer" to work directly with the buffer sent as binary via websocket, and "stop" to cleanup.
+
+```elixir
+defmodule VideoLive do
+  use Kino.JS
+  use Kino.JS.Live
+
+  @html """
+    <div id="elt">
+      <figure>
+        <video id="source" width="640" height="480" muted autoplay playsinline></video>
+        <figcaption>Local webcam</figcaption>
+      </figure>
+      <br/>
+      <button type="button" id="send-chunk">Send chunks</button>
+      <button type="button" id="stop">Stop</button>
+    </div>
+    """
+
+
+  asset "main.css" do
+    """
+    #elt {
+      display: flex;
+      flex-direction: column;
+      align-items: center
+    }
+    button {
+      margin-top: 1em;
+      margin-bottom: 1em;
+      padding: 1em;
+      background-color: bisque;
+    }
+    """
+  end
+  
+  asset "main.js" do
+    """
+    export function init(ctx, html) {
+      console.log("init")
+      ctx.importCSS("main.css");
+      ctx.root.innerHTML = html;
+
+      function run() {
+        let video1 = document.getElementById("source"),
+  			video2 = document.getElementById("output"),
+  			start = document.getElementById("send-chunk"),
+  			stop = document.getElementById("stop");
+
+  			navigator.mediaDevices.getUserMedia({video: true})
+  			.then((stream)=> {
+  				video1.srcObject = stream
+      
+  				let mediaRecorder = new MediaRecorder(stream);
+  				mediaRecorder.ondataavailable = async ({data}) => {
+  					if (data.size > 0) {
+  						console.log(data.size)
+  						const buffer = await data.arrayBuffer()
+  						ctx.pushEvent("chunk", [{}, buffer]);
+  					}
+      		}
+    
+  				start.onclick = () => {
+  					mediaRecorder.start(1000);
+  					
+  				}
+  
+  				stop.onclick = () => {
+  					mediaRecorder.stop();
+  					ctx.pushEvent("stop", {});
+  				}
+  			})
+      }
+      run()
+    }
+    """
+  end
+
+
+  def new() do
+    Kino.JS.Live.new(__MODULE__, @html)
+  end
+
+  @impl true
+  def init(html, ctx) do
+    ffmpeg_path = Constants.ffmpeg_path()
+    model = Constants.haar()
+
+    # runs FFmpeg as a keep alive process: the file names are set by FFmpeg
+    {:ok, pid} = 
+      ~w(#{ffmpeg_path} -i pipe:0  -r 15 -video_size 640x480 pics/test_%004d.jpg)
+      |> ExCmd.Process.start_link()
+    
+    {:ok, assign(ctx, html: html, proc_file: pid, model: model)}
+  end
+
+  @impl true
+  def handle_connect(ctx) do
+    {:ok, ctx.assigns.html, ctx}
+  end
+
+  # received from the browser
+  @impl true
+  def handle_event("stop", _, ctx) do
+    IO.puts "STOPPED"
+    ExCmd.Process.close_stdin(ctx.assigns.proc_file)
+    ExCmd.Process.await_exit(ctx.assigns.proc_file)
+    {:noreply, ctx}
+  end
+  
+  def handle_event("chunk", {:binary, _, data}, ctx) do
+    :ok = ExCmd.Process.write(ctx.assigns.proc_file, data)
+    send(self(), :continue)
+    {:noreply, ctx}
+  end
+
+  @impl true
+  def handle_info(:continue, ctx) do
+    #img_path = Path.join("./pics/", File.ls!("./pics")|> List.last())
+    
+
+    #File.read!(img_path) 
+    #|> Processor.contour()
+    
+    #broadcast_event(ctx, "new", {:binary, [%{}, ]})
+    
+    IO.puts("Total files: #{File.ls!("pics") |> length()}")
+    {:noreply, ctx}
+  end
+end
+```
+
+```elixir
+defmodule Processor do
+
+  def haar() do
+    haar_path = 
+      Path.join(
+        :code.priv_dir(:evision),
+        "share/opencv4/haarcascades/haarcascade_frontalface_default.xml"
+      )
+          
+    Evision.CascadeClassifier.cascadeClassifier(haar_path)
+  end
+
+  def contour(path) do
+    img = Evision.imread(path) 
+    
+    grey_data = 
+      Evision.cvtColor(img, Evision.ImreadModes.cv_IMREAD_GRAYSCALE())
+    
+    faces = 
+      Evision.CascadeClassifier.detectMultiScale(Constants.haar(), grey_data)
+    
+    new_img = 
+      Enum.reduce(faces, img, fn {x, y, w, h}, mat ->
+      Evision.rectangle(mat, {x, y}, {x + w, y + h}, {0, 0, 255}, thickness: 2)
+    end)
+   
+
+    Evision.imwrite("pics/out-#{Path.basename(path)}", new_img)
+  end
+end
+```
+
+```elixir
+VideoLive.new()
+```
+
+### Face contouring on a single image
+
+Testing on a single image extracted from the previous run, you can check:
+
+```elixir
+Path.join("./pics/", File.ls!("./pics")|> List.last())
+|> Processor.contour()
+```

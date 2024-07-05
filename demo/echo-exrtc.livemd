@@ -4,7 +4,7 @@
 Mix.install([
   {:kino, "~> 0.13.1"},
   {:ex_webrtc, "~> 0.3.0"},
-  # {:ex_cmd, "~> 0.12.0"}
+  {:ex_cmd, "~> 0.12.0"}
 ])
 ```
 
@@ -16,9 +16,7 @@ The browser and the Elixir SFU will establish a WebRTC PeerConnection via a sign
 
 They will exchange SDP and ICE candidates.
 
-Once connected, the Elixir SFU will receive the streams from the `<video 1>` via a UDP connection. In this Echo configuration, it will send back the streams to the connected peer.
-
-These streams are forwarded via UDP and displayed in another `<video 2>` element.
+Once connected, the Elixir SFU will receive the streams from the `<video 1>` via a UDP connection. In this Echo configuration, it will send back the streams to the connected peer via UDP and display them in the other `<video 2>` element.
 
 <!-- livebook:{"break_markdown":true} -->
 
@@ -47,17 +45,22 @@ graph LR;
 ### Server-side WebRTC module
 
 ```elixir
-
-
 defmodule RtcServer do
   use GenServer
 
-  alias ExWebRTC.{ICECandidate, PeerConnection, SessionDescription, MediaStreamTrack}
+  alias ExWebRTC.{ICECandidate, PeerConnection, SessionDescription, MediaStreamTrack, RTPCodecParameters}
   alias ExWebRTC.RTP.VP8.Depayloader
 
   require Logger
 
   defp ice_servers(), do: [%{urls: "stun:stun.l.google.com:19302"}]
+  defp video_codecs, do: [
+    %RTPCodecParameters{
+      payload_type: 96,
+      mime_type: "video/VP8",
+      clock_rate: 90_000
+    }
+  ]
 
   defp setup_transceivers(pc) do
     media_stream_id = MediaStreamTrack.generate_stream_id()
@@ -66,6 +69,14 @@ defmodule RtcServer do
     %{serv_video_track: video_track}
   end
 
+  defp setup_ffmpeg do
+    ffmpeg = "/opt/homebrew/Cellar/ffmpeg/7.0-with-options_1/bin/ffmpeg"
+    #ffmpeg_cmd = ~w(#{ffmpeg} -i pipe:0 -f vpx -c:v copy -f webm pipe:1 )
+    ffmpeg_cmd =  ~w(#{ffmpeg} -i pipe:0 -f rawvideo -vcodec vp8 -f ifv -y demo/output.ivf)
+      
+    {:ok, pid} = ExCmd.Process.start_link(ffmpeg_cmd, log: true)
+    pid
+  end
   # ??? -> can't find ffmpeg in Livebook?
 
 
@@ -88,8 +99,9 @@ defmodule RtcServer do
       pc: nil,
       client_video_track: nil,
       video_depayloader: Depayloader.new(),
-      i: 0,
-      t: System.monotonic_time(:microsecond)
+      i: 1,
+      t: System.monotonic_time(:microsecond),
+      ffmpeg_pid: setup_ffmpeg()
     }}
   end
 
@@ -100,7 +112,8 @@ defmodule RtcServer do
   end
 
   def handle_call(:connect, _, state) do
-    {:ok, pc_pid} = PeerConnection.start_link(ice_servers: ice_servers())
+    {:ok, pc_pid} = 
+      PeerConnection.start_link(ice_servers: ice_servers(), video_codecs: video_codecs())
 
     state = %{state | pc: pc_pid} |> Map.merge(setup_transceivers(pc_pid))
     {:reply, :connected, state}
@@ -119,13 +132,11 @@ defmodule RtcServer do
            PeerConnection.set_local_description(state.pc, answer),
          :ok <-
            gather_candidates(state.pc) do
-      Logger.warning("--> Server sends Answer to remote")
 
       #  the 'answer' is formatted into a struct, which can't be read by the JS client
       answer = %{"type" =>  "answer", "sdp" => answer.sdp}
-
-
       send(sender, {:signaling, answer})
+      Logger.warning("--> Server sends Answer to remote")
       {:noreply, %{state | sender: sender}}
     else
       error ->
@@ -171,11 +182,16 @@ defmodule RtcServer do
   end
 
   def handle_info({:ex_webrtc, pc, {:connection_state_change, :connected}}, state) do
-    sdp = PeerConnection.get_remote_description(pc).sdp
-    [codec, _] =
-      Regex.scan(~r/a=rtpmap:([a-zA-Z0-9\s]+)/, sdp) |> List.first()
+    #sdp = PeerConnection.get_remote_description(pc).sdp
+    #[codec, _] =
+    #  Regex.scan(~r/a=rtpmap:([a-zA-Z0-9\s]+)/, sdp)
 
-    Logger.warning("PeerConnection successfully connected, using #{inspect(codec)}")
+    PeerConnection.get_transceivers(pc) 
+    |> Enum.find(&(&1.kind == :video)) 
+    |> then(fn %{receiver: receiver} -> 
+      Logger.warning("PeerConnection successfully connected, using #{inspect(receiver.codec.mime_type)}")
+      end)
+    
     {:noreply, state}
   end
 
@@ -195,8 +211,14 @@ defmodule RtcServer do
           t = System.monotonic_time(:microsecond)
           q = 30
           if (Integer.mod(n, q) == 0) do
-             # Path.join(File.cwd!(), "frame.vp8") |> File.write!(frame)
-            Logger.debug(%{size: Float.round(byte_size(frame)*8/1000,1), fps: round(q* 1_000_000/(t-state.t))})
+            Logger.debug(%{
+              size: Float.round(byte_size(frame)*8/1000,1), 
+              fps: round(q* 1_000_000/(t-state.t))
+            })
+
+            :ok = ExCmd.Process.write(state.ffmpeg_pid, frame)
+            
+              
             %{state | video_depayloader: d, i: n, t: t}
           else
             %{ state | video_depayloader: d, i: n}
@@ -224,7 +246,7 @@ Supervisor.start_link([RtcServer], strategy: :one_for_one, name: MySup)
 and instantiate a new PeerConnection:
 
 ```elixir
-RtcServer.connect()
+:connected = RtcServer.connect()
 ```
 
 This will instantiate a `ExWebRTC.PeerConnection` server-side.
@@ -241,7 +263,6 @@ On connection, a new `PeerConnection` is created. Since the server is already co
 Once the connection is set, the client will receive RTP packets and digest them into a `<video>` element.
 
 ```elixir
-
 defmodule VideoLive do
   # GenServer to communicate between browser and Livebook server
 

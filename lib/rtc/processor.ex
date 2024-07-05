@@ -1,20 +1,21 @@
 defmodule Rtc.ProcessorAgent do
   use Agent
-  alias Evision, as: Cv
-  alias Cv.CascadeClassifier
+
+  alias Evision.CascadeClassifier
+  alias Rtc.Env
 
   @moduledoc """
   Agent to load and hold the Haar Cascade model for the processor.
   """
 
   def start_link(type: type, user_id: user_id) do
-    face_cascade_path =
-      Path.join(
-        Application.get_env(:rtc, :models)[:haar_cascade],
-        "haarcascade_frontalface_default.xml"
-      )
+    # face_cascade_path =
+    #   Path.join([Env.haar(), "haarcascade_frontalface_default.xml"])
+    #   |> dbg()
 
-    face_cascade_model = CascadeClassifier.cascadeClassifier(face_cascade_path)
+    face_cascade_path = Env.haar()
+
+    face_cascade_model = CascadeClassifier.cascadeClassifier(face_cascade_path) |> dbg()
 
     state = %{type: type, user_id: user_id, face_cascade_model: face_cascade_model}
     Agent.start_link(fn -> state end, name: __MODULE__)
@@ -30,12 +31,18 @@ defmodule Rtc.Processor do
   Processes HLS segments, detects faces in 1 out of every 20 frames,
   and adds a rectangle around detected faces.
   """
+  alias Evision.{CascadeClassifier, VideoCapture, Constant}
+  alias Evision, as: Cv
 
   def process_video do
     IO.puts("EVISION Process------")
-    capture = Evision.VideoCapture.videoCapture(0)
-    frame = Evision.VideoCapture.read(capture)
-    grey_frame = Evision.cvtColor(frame, Evision.Constant.cv_COLOR_BGR2GRAY())
+    capture = VideoCapture.videoCapture(0) |> dbg()
+
+    frame = VideoCapture.read(capture) |> dbg()
+    # %{shape: {h,w,ch}}= frame
+    # frame = Cv.resize(frame, {w, h}) |> dbg()
+    grey_frame = Cv.cvtColor(frame, Constant.cv_COLOR_BGR2GRAY())
+    dbg(grey_frame)
     detect_and_redraw(grey_frame)
   end
 
@@ -43,13 +50,14 @@ defmodule Rtc.Processor do
     face_cascade_model = Rtc.ProcessorAgent.get_haar_model()
 
     faces =
-      Evision.CascadeClassifier.detectMultiScale(face_cascade_model, grey_frame,
+      CascadeClassifier.detectMultiScale(face_cascade_model, grey_frame,
         scaleFactor: 1.8,
-        minNeighbors: 4
+        minNeighbors: 1
       )
+      |> dbg()
 
     Enum.reduce(faces, grey_frame, fn {x, y, w, h}, mat ->
-      Evision.rectangle(mat, {x, y}, {x + w, y + h}, {0, 0, 255}, thickness: 2)
+      Cv.rectangle(mat, {x, y}, {x + w, y + h}, {0, 0, 255}, thickness: 2)
     end)
   end
 

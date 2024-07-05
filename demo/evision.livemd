@@ -1,0 +1,155 @@
+# Face Detection in Elixir
+
+```elixir
+Mix.install(
+  [
+    {:evision, "~> 0.2"},
+    {:kino, "~> 0.7"}
+  ],
+  system_env: [
+    # optional, defaults to `true`
+    # set `EVISION_PREFER_PRECOMPILED` to `false`
+    # if you prefer `:evision` to be compiled from source
+    # note that to compile from source, you may need at least 1GB RAM
+    {"EVISION_PREFER_PRECOMPILED", true},
+
+    # optional, defaults to `true`
+    # set `EVISION_ENABLE_CONTRIB` to `false`
+    # if you don't need modules from `opencv_contrib`
+    {"EVISION_ENABLE_CONTRIB", true},
+
+    # optional, defaults to `false`
+    # set `EVISION_ENABLE_CUDA` to `true`
+    # if you wish to use CUDA related functions
+    # note that `EVISION_ENABLE_CONTRIB` also has to be `true`
+    # because cuda related modules come from the `opencv_contrib` repo
+    {"EVISION_ENABLE_CUDA", false},
+
+    # required when
+    # - `EVISION_ENABLE_CUDA` is `true`
+    # - and `EVISION_PREFER_PRECOMPILED` is `true`
+    #
+    # set `EVISION_CUDA_VERSION` to the version that matches
+    # your local CUDA runtime version
+    #
+    # current available versions are
+    # - 118
+    # - 121
+    # {"EVISION_CUDA_VERSION", "118"},
+
+    # require for Windows users when
+    # - `EVISION_ENABLE_CUDA` is `true`
+    # set `EVISION_CUDA_RUNTIME_DIR` to the directory that contains
+    # CUDA runtime libraries
+    # {"EVISION_CUDA_RUNTIME_DIR", "C:/PATH/TO/CUDA/RUNTIME"}
+  ]
+)
+```
+
+## Camera Initialization
+
+```elixir
+face_cascade_path =
+  Path.join([
+    :code.priv_dir(:evision),
+     "share/opencv4/haarcascades/haarcascade_frontalface_default.xml"
+  ])
+
+face_cascade = Evision.CascadeClassifier.cascadeClassifier(face_cascade_path)
+```
+
+## Do it Once
+
+```elixir
+capture = Evision.VideoCapture.videoCapture(0) 
+
+frame = Evision.VideoCapture.read(capture)
+grey = Evision.cvtColor(frame, Evision.Constant.cv_COLOR_BGR2GRAY())
+
+faces =
+  Evision.CascadeClassifier.detectMultiScale(
+    face_cascade,
+    grey,
+    scaleFactor: 1.8,
+    minNeighbors: 1
+  )
+|> dbg()
+
+# Draw a red rectangle over each detected face
+mat =
+  Enum.reduce(faces, frame, fn {x, y, w, h}, mat ->
+    Evision.rectangle(mat, {x, y}, {x + w, y + h}, {0, 0, 255}, thickness: 2)
+  end)
+```
+
+## Livebook Frames
+
+## Do it live
+
+```elixir
+out = Kino.Frame.new()
+Kino.render(out)
+
+for _ <- 0..2 do
+  frame =
+    Evision.VideoCapture.read(capture)
+    |> Evision.resize({640, 360})
+  
+
+  
+
+  grey_frame = Evision.cvtColor(frame, Evision.Constant.cv_COLOR_BGR2GRAY())
+
+  faces =
+    Evision.CascadeClassifier.detectMultiScale(
+      face_cascade,
+      grey_frame,
+      scaleFactor: 1.8,
+      minNeighbors: 4
+    )
+
+  # Draw a red rectangle over each detected face
+  mat =
+    Enum.reduce(faces, frame, fn {x, y, w, h}, mat ->
+      Evision.rectangle(mat, {x, y}, {x + w, y + h}, {0, 0, 255}, thickness: 2)
+    end)
+
+  dbg(mat)
+  target_x = 300
+  target_y = 300
+
+  # Find the center of all detected faces
+  {center_x, center_y} =
+    if Enum.empty?(faces) do
+      {2, [h, w]} = Evision.Mat.size(frame)
+      {w / 2, h / 2}
+    else
+      x = Enum.sum(Enum.map(faces, fn {x, _y, w, _h} -> x + w / 2 end)) / length(faces)
+      y = Enum.sum(Enum.map(faces, fn {_x, y, _w, h} -> y + h / 2 end)) / length(faces)
+
+      {x, y}
+    end
+
+  # Find a 300x300 rectangle to crop to
+  # Ideally, centered around the face
+  bounding_box = {
+    max(0, round(center_x - target_x / 2)),
+    max(0, round(center_y - target_y / 2)),
+    target_x,
+    target_y
+  }
+  |> dbg()
+
+  # Crop the image down to the 300x300 box
+  mat = Evision.Mat.roi(mat, bounding_box)
+
+  Kino.Frame.render(out, mat)
+end
+
+
+
+
+
+
+:ok
+```

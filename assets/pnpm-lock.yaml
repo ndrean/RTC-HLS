@@ -18,8 +18,8 @@ importers:
         specifier: ^0.22.2
         version: 0.22.2
       hls.js:
-        specifier: ^1.5.11
-        version: 1.5.11
+        specifier: ^1.5.13
+        version: 1.5.13
 
 packages:
 
@@ -67,8 +67,8 @@ packages:
   fast-deep-equal@2.0.1:
     resolution: {integrity: sha512-bCK/2Z4zLidyB4ReuIsvALH6w31YfAQDmXMqMx6FyfHqvBxtjC0eRumeSu4Bs3XtXwpyIywtSTrVT99BxY1f9w==}
 
-  hls.js@1.5.11:
-    resolution: {integrity: sha512-q3We1izi2+qkOO+TvZdHv+dx6aFzdtk3xc1/Qesrvto4thLTT/x/1FK85c5h1qZE4MmMBNgKg+MIW8nxQfxwBw==}
+  hls.js@1.5.13:
+    resolution: {integrity: sha512-xRgKo84nsC7clEvSfIdgn/Tc0NOT+d7vdiL/wvkLO+0k0juc26NRBPPG1SfB8pd5bHXIjMW/F5VM8VYYkOYYdw==}
 
   html-entities@1.4.0:
     resolution: {integrity: sha512-8nxjcBcd8wovbeKx7h3wTji4e6+rhaVuPNpMqwWgnHh+N9ToqsCs6XztWRBPQ+UtzsoMAdKZtUENoVzU/EMtZA==}
@@ -171,7 +171,7 @@ snapshots:
 
   fast-deep-equal@2.0.1: {}
 
-  hls.js@1.5.11: {}
+  hls.js@1.5.13: {}
 
   html-entities@1.4.0: {}
 

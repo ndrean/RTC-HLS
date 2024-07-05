@@ -11,7 +11,7 @@
       window.userToken= "<%= assigns[:user_token] %>"
     </script>
     <script>
-      window.fps="<%= Application.get_env(:rtc, :fps) %>"
+      window.fps="<%= Rtc.Env.fps() %>"
     </script>
 
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />

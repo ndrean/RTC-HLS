@@ -38,6 +38,7 @@ defmodule RtcWeb.Router do
     post "/live-upload", HlsController, :files
   end
 
+  # serve the HLS segments & playlist
   scope "/hls", RtcWeb do
     pipe_through :browser
     get "/:file", HlsController, :segment
@@ -48,10 +49,10 @@ defmodule RtcWeb.Router do
     get "/:file", HlsController, :segment
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", RtcWeb do
-  #   pipe_through :api
-  # end
+  # serving the face-api model loading from the browser
+  scope "/models", RtcWeb do
+    get "/face-api/:file", HlsController, :face_api
+  end
 
   # Enable LiveDashboard in development
   if Application.compile_env(:rtc, :dev_routes) do
@@ -73,10 +74,10 @@ defmodule RtcWeb.Router do
     conn =
       Plug.Conn.fetch_session(conn)
 
-    Plug.CSRFProtection.delete_csrf_token()
-    Plug.CSRFProtection.get_csrf_token()
+    # Plug.CSRFProtection.delete_csrf_token()
+    # Plug.CSRFProtection.get_csrf_token()
 
-    case Plug.Conn.get_session(conn, :user_id) |> dbg() do
+    case Plug.Conn.get_session(conn, :user_id) do
       nil ->
         uid = System.unique_integer() |> abs() |> Integer.to_string()
         user_id = Phoenix.Token.sign(RtcWeb.Endpoint, "user id", uid)
@@ -90,6 +91,8 @@ defmodule RtcWeb.Router do
         |> Plug.Conn.assign(:user_token, user_token)
 
       user_id ->
+        IO.puts("plug user token------------------------------")
+
         user_token =
           Phoenix.Token.sign(RtcWeb.Endpoint, "user token", user_id)
 

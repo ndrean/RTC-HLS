@@ -12,7 +12,15 @@ defmodule Rtc.RoomEcho do
   require Logger
 
   alias Rtc.FFmpegStreamer
-  alias ExWebRTC.{ICECandidate, PeerConnection, RTPCodecParameters, SessionDescription, MediaStreamTrack}
+
+  alias ExWebRTC.{
+    ICECandidate,
+    PeerConnection,
+    RTPCodecParameters,
+    SessionDescription,
+    MediaStreamTrack
+  }
+
   alias ExWebRTC.RTP.VP8.Depayloader
 
   @ice_servers [
@@ -30,18 +38,6 @@ defmodule Rtc.RoomEcho do
   ]
 
   defp id(room_id), do: {:via, Registry, {Rtc.Reg, room_id}}
-
-  defp set_ffmpeg do
-    ffmpeg = System.find_executable("ffmpeg") || "/opt/hombrew/bin/ffmpeg"
-
-    {:ok, _pid} =
-      ExCmd.Process.start_link(
-        ~w(#{ffmpeg} -i pipe:0 -vframes 1 -q:v 2 /Users/nevendrean/code/elixir/RTC-HLS/frame.jpg),
-        log: true
-      )
-  end
-
-  :monotonic_time |> IO.inspect(label: "monotonic_time")
 
   def start_link(args) do
     rid = Keyword.get(args, :room_id)
@@ -66,10 +62,10 @@ defmodule Rtc.RoomEcho do
     uid = Keyword.get(args, :user_id)
 
     Logger.debug("Starting Room:#{rid} GS, #{inspect(self())}")
+
     ffmpeg_pid = FFmpegStreamer.get_ffmpeg_pid(%{user_id: uid, type: "echo"})
+
     Process.link(ffmpeg_pid)
-    # {:ok, ffmpeg} = set_ffmpeg()
-    # Process.monitor(ffmpeg)
 
     {:ok,
      %{
@@ -82,28 +78,12 @@ defmodule Rtc.RoomEcho do
        client_video_track: nil,
        client_audio_track: nil,
        video_depayloader: Depayloader.new(),
-      #  video_decoder: Xav.Decoder.new(:vp8),
+       #  video_decoder: Xav.Decoder.new(:vp8),
        i: 1,
        t: System.monotonic_time(:microsecond),
-        ffmpeg: ffmpeg_pid
-      }}
+       ffmpeg: ffmpeg_pid
+     }}
   end
-
-  @impl true
-  # caoont start a GenServer from a GenServer!
-  # def handle_continue(:init_streamer, state) do
-  #   {:ok, pid} =
-  #     DynamicSupervisor.start_child(
-  #       Rtc.DynSup,
-  #       {Rtc.FFmpegStreamer, [type: "echo", user_id: state.user_id]}
-  #     )
-
-  #   Process.link(pid)
-  #   ffmpeg_pid = FFmpegStreamer.get_ffmpeg_pid(%{user_id: state.user_id, type: "echo"})
-  #   dbg(ffmpeg_pid)
-
-  #   {:noreply, Map.put(state, :ffmpeg, ffmpeg_pid)}
-  # end
 
   @impl true
   def handle_call({:connect, channel_pid, user_id}, _from, state) do
@@ -230,11 +210,19 @@ defmodule Rtc.RoomEcho do
 
   def handle_info({:ex_webrtc, pc, {:connection_state_change, :connected}}, state) do
     send(state.lv_pid, :user_connected)
-    sdp = PeerConnection.get_remote_description(pc).sdp
-    Regex.scan(~r/a=rtpmap:([a-zA-Z0-9\s]+)/, sdp) |> dbg()
+    # sdp = PeerConnection.get_remote_description(pc).sdp
+    # Regex.scan(~r/a=rtpmap:([a-zA-Z0-9\s]+)/, sdp) |> dbg()
 
-    # PeerConnection.get_local_description(pc) |> dbg()
-    Logger.debug("Server to client PeerConnection #{inspect(pc)} successfully connected")
+    PeerConnection.get_transceivers(pc)
+    |> Enum.find(&(&1.kind == :video))
+    |> then(fn %{receiver: receiver} ->
+      dbg(receiver.codec.mime_type)
+
+      Logger.warning(
+        "PeerConnection successfully connected, video using #{inspect(receiver.codec.mime_type)}"
+      )
+    end)
+
     {:noreply, state}
   end
 
@@ -260,7 +248,7 @@ defmodule Rtc.RoomEcho do
 
   ########################################################################################
   defp handle_paquet(packet, state) do
-    %{i: i, lv_pid: lv_pid, ffmpeg: ffmpeg} = state
+    %{i: i, lv_pid: _lv_pid, ffmpeg: ffmpeg} = state
 
     case Depayloader.write(state.video_depayloader, packet) do
       {:ok, d} ->
@@ -268,21 +256,30 @@ defmodule Rtc.RoomEcho do
 
       {:ok, frame, d} ->
         n = i + 1
+        q = 30
 
-        if Integer.mod(n, 100) == 0 do
-          Logger.debug(%{count: i, size: round(byte_size(frame) * 8 / 1000)})
-          File.write("/Users/nevendrean/code/elixir/RTC-HLS/frame.vp8", frame)
+        if Integer.mod(i, q) == 0 do
+          t = System.monotonic_time(:microsecond)
+
+          Logger.debug(%{
+            count: i,
+            size: Float.round(byte_size(frame) * 8 / 1_000, 1),
+            fps: round(q * 1_000_000 / (t - state.t))
+          })
+
+          # File.write("/Users/nevendrean/code/elixir/RTC-HLS/frame.vp8", frame)
           :ok = ExCmd.Process.write(ffmpeg, frame)
-          # Xav.Decorder.decode(state.video_decoder, frame) |> dbg()
-
-          # |> then(fn data -> send(lv_pid, {:echo, data, n}) end)
+          # {:ok, data} = ExCmd.Process.read(ffmpeg) |> dbg()
+          # ExCmd.stream!(~w(ffmpeg -i pipe:0 -f vpx -c:v copy -f webm pipe:1), input: frame, log: true)
+          # |> Stream.into(File.stream!("demo/test.webm"))
+          %{state | video_depayloader: d, i: n, t: t}
+        else
+          %{state | video_depayloader: d, i: n}
         end
 
-        %{state | video_depayloader: d, i: n}
-
-      {:error, msg} ->
-        Logger.error("Error depayloading video: #{msg}")
-        state
+        # {:error, msg} ->
+        #   Logger.error("Error depayloading video: #{msg}")
+        #   state
     end
   end
 

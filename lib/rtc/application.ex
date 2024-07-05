@@ -5,20 +5,18 @@ defmodule Rtc.Application do
 
   use Application
 
+  alias Rtc.Env
+
   def ensure_dir do
-    if {:error, :eexist} ==
-         Application.fetch_env!(:rtc, :hls)[:hls_dir]
-         |> File.mkdir() and
-         {:error, :eexist} ==
-           Application.fetch_env!(:rtc, :hls)[:dash_dir]
-           |> File.mkdir(),
-       do: :ok,
-       else: :error
+    File.mkdir(Env.hls_dir())
+    File.mkdir(Env.dash_dir())
+    {:error, _} = File.mkdir(Env.models_dir())
   end
 
   @impl true
   def start(_type, _args) do
-    :ok = ensure_dir()
+    Env.init()
+    ensure_dir()
 
     children = [
       RtcWeb.Telemetry,
@@ -33,9 +31,9 @@ defmodule Rtc.Application do
       Rtc.Lobby,
       {FileWatcher,
        [
-         watch_dir: Application.fetch_env!(:rtc, :hls)[:hls_dir],
+         watch_dir: Env.hls_dir(),
          output_dir: Application.fetch_env!(:rtc, :hls)[:tmp_dir],
-         playlist_path: Application.fetch_env!(:rtc, :hls)[:hls_dir]
+         playlist_path: Env.hls_dir()
        ]},
       RtcWeb.Endpoint
     ]

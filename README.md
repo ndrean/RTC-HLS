@@ -140,6 +140,7 @@ When you need to process the streams, such as:
       - [Set up](#set-up)
       - [Stream Presence](#stream-presence)
       - [A word on "hooks"](#a-word-on-hooks)
+    - [FFmpeg commands](#ffmpeg-commands-1)
 
 <hr/>
 
@@ -2596,3 +2597,16 @@ liveSocket.connect()
 ```
 
 [:arrow_up:](#rtc---demo-of-elixir-and-webrtc)
+
+### FFmpeg commands
+
+- capture the webcam and output raw images at 30 fps
+-
+
+```
+ffmpeg -f avfoundation -framerate 30 -pixel_format uyvy422   -pixel_format uyvy422  -i "0"  demo/test_%03d.jpg
+```
+
+```
+ffmpeg -f avfoundation -framerate 30 -pixel_format uyvy422   -pixel_format uyvy422  -i "0"  -f image2pipe pipe:1
+```

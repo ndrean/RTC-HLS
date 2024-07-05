@@ -19,12 +19,15 @@ export default {
 
     const [faceapi, stream] = await Promise.all([
         import("@vladmandic/face-api"),
-        navigator.mediaDevices.getUserMedia({ video: true }),
+        navigator.mediaDevices.getUserMedia({
+          video: { width: 720, height: 560 },
+          audio: false,
+        }),
       ]),
       _this = this;
 
-    // await faceapi.nets.tinyFaceDetector.loadFromUri("/models/face-api");
-    await faceapi.nets.ssdMobilenetv1.loadFromUri("/models/face-api");
+    await faceapi.nets.tinyFaceDetector.loadFromUri("/models/face-api");
+    // await faceapi.nets.ssdMobilenetv1.loadFromUri("/models/face-api");
 
     this.video.srcObject = stream;
     this.video.onloadeddata = this.video.play;
@@ -80,8 +83,8 @@ export default {
       );
       const detections = await faceapi.detectAllFaces(
         _this.video,
-        // new faceapi.TinyFaceDetectorOptions()
-        new faceapi.SsdMobilenetv1Options()
+        new faceapi.TinyFaceDetectorOptions()
+        // new faceapi.SsdMobilenetv1Options()
       );
 
       const resizedDetections = faceapi.resizeResults(detections, displaySize);

@@ -6,7 +6,7 @@ Application.put_env(:sample, Example.Endpoint,
 )
 
 Mix.install([
-  {:plug_cowboy, "~> 2.7"},
+  {:bandit, "~> 1.5"},
   {:jason, "~> 1.4"},
   {:phoenix, "~> 1.7"},
   {:phoenix_live_view, "~> 0.20"},
