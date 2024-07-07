@@ -3,13 +3,23 @@
 <h1 align="center"><b>DRAFT</b></h1>
 <br/>
 
-This is a "basic" `LiveView` app where we experiment processing videos streams with different protocles. We explore the `WebRTC` API, the `ExRTC` (`Elxiir` implementation of WebRTC), HTTP Live Streaming with `HLS` or `DASH`. We want to demonstrate how one can make and broadcast live transformations on images.
+This is a "basic" `LiveView` app where we experiment processing videos streams with different protocles. We explore the `WebRTC` API, the `ExRTC` (`Elxiir` implementation of WebRTC), HTTP Live Streaming with `HLS` or `DASH` and `MSE` (Media Source Extensions). We want to demonstrate how one can make and broadcast live transformations on images.
 
 Our transformation will be the "Hello World" of computer vision, **face contouring**.
 
 We heavily use `FFmpeg` and the Elixir libraries `ExWebERTC`, `Evision` (`OpenCV` made accessible to `Elixir`), `ExCmd` as the `FFmpeg` runner (on the OS level), and of course `Phoenix LiveView` and `Elixir.Channel`.
 
-**:hash: What are we building?**
+> Media Source Extensions is just a player inside the browser. You create a MediaSource object https://developer.mozilla.org/en-US/docs/Web/API/MediaSource and assign it to your video element like this video.src = URL.createObjectURL(mediaSource); Then your javascript code can fetch media segments from somewhere (your server or webserver) and supply to SourceBuffer attached to MediaSource, for playback. WebRTC is not just a player, it is also a capture, encoding and sending mechanism. So it is a player too, and you use it a little differently from Media Source Extensions. Here you create another object: MediaStream object https://developer.mozilla.org/en-US/docs/Web/API/MediaStream and assign it to your video element like this video.srcObject = URL.createObjectURL(mediaStream); Notice that in this case the mediaStream object is not created directly by yourself, but supplied to you by WebRTC APIs such as getUserMedia. So, to summarize, in both cases you use video element to play, but with Media Source Extensions you have to supply media segments by yourself, while with WebRTC you use WebRTC API to supply media. And, once again, with WebRTC you can also capture user's webcam, encode it and send to another browser to play, enabling p2p video chat, for example.
+
+Browser to browser video chat testing without WebRTC. How to Use the web socket server to send and receive data in real time.
+
+    Obtain media stream using getUserMedia to access webcams on the local computer.
+    MediaRecorder encodes media stream and converts it into blob data.(media segment)
+    Send blob data to the server via a web socket.(Blob data will be converted into arrayBuffer)
+    The server returns the data back to the client.
+    By using appendBuffer, appends the media segment to the SourceBuffer in MediaSource.
+
+> **:hash: What are we building?**
 
 We will use the camera and microphone of the device to exchange media streams.
 We want to use differents protocoles, thus different use cases, to broadcast our feed.

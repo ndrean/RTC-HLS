@@ -151,7 +151,7 @@ defmodule Rtc.FFmpegStreamer do
   end
 
   # for test only echo, called by test controller
-  def handle_call(:get_ffmpeg_pid, from, state) do
+  def handle_call(:get_ffmpeg_pid, _from, state) do
     {:reply, state.ffmpeg_pid, state}
   end
 

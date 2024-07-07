@@ -126,7 +126,8 @@ defmodule VideoLive do
 
     # runs FFmpeg as a keep alive process: the file names are set by FFmpeg
     {:ok, pid} = 
-      ~w(#{ffmpeg_path} -i pipe:0  -r 15 -video_size 640x480 pics/test_%004d.jpg)
+      # ~w(#{ffmpeg_path} -i pipe:0  -r 15 -video_size 640x480 pics/test_%004d.jpg)
+      ~w(#{ffmpeg_path} ffmpeg -i pipe:0 -r 30 -s 640x480 -vf format=yuv420p -y in/test_%04d.jpg)
       |> ExCmd.Process.start_link()
     
     {:ok, assign(ctx, html: html, proc_file: pid, model: model)}

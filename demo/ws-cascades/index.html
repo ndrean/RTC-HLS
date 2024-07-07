@@ -1,11 +1,5 @@
 <div id="elt">
-  <button type="button" id="file-proc">
-    Save video into files of frames via Process
-  </button>
-  <br />
-  <button type="button" disabled id="file-stream">
-    Save video into files of frames via Stream
-  </button>
+  <button type="button" id="file-proc">START</button>
   <br />
   <button type="button" id="stop">STOP</button>
   <br />
@@ -30,17 +24,16 @@
       autoplay
       playsinline
       controls
-      type='video/webm; codecs="vp8, vorbis"'
     ></video>
     <figcaption>Modified image</figcaption>
   </figure>
 </div>
 <script type="text/javascript">
-  let video1 = document.getElementById("source");
-  let video2 = document.getElementById("output");
-  let fileProc = document.getElementById("file-proc");
-  let fileStream = document.getElementById("file-stream");
-  let stop = document.getElementById("stop");
+  let video1 = document.getElementById("source"),
+    video2 = document.getElementById("output"),
+    fileProc = document.getElementById("file-proc"),
+    stop = document.getElementById("stop"),
+    isReady = false;
 
   let socket = new WebSocket("ws://localhost:4000/socket");
 
@@ -50,6 +43,7 @@
       video1.srcObject = stream;
       let mediaRecorder = new MediaRecorder(stream);
       mediaRecorder.ondataavailable = async ({ data }) => {
+        if (!isReady) return;
         if (data.size > 0) {
           console.log(data.size);
           const buffer = await data.arrayBuffer();
@@ -59,24 +53,50 @@
         }
       };
 
-      socket.onmessage = ({ data }) => {
-        console.log(data);
-        //const blob = new Blob([data], {type: "video/webm"});
-        //video2.src = URL.createObjectURL(blob);
-      };
-
       fileProc.onclick = () => {
-        socket.send("file-proc");
-        mediaRecorder.start(1_000);
-      };
-      fileStream.onclick = () => {
-        socket.send("file-stream");
-        mediaRecorder.start(1_000);
+        isReady = true;
+        if (mediaRecorder.state == "inactive") mediaRecorder.start(1_000);
       };
 
       stop.onclick = () => {
         mediaRecorder.stop();
         socket.send("stop");
+        socket.close();
       };
     });
+
+  let mediaSource = new MediaSource(),
+    queue = [],
+    sourceBuffer,
+    mimeCodec = 'video/webm; codecs="vp8, opus"';
+  // mimeCodec = 'video/mp4; codecs="avc1.64001E, mp4a.40.2"';
+
+  if (!MediaSource.isTypeSupported(mimeCodec)) {
+    alert("Unsupported MIME type or codec: ", mimeCodec);
+    throw new Error("Unsupported MIME type or codec: " + mimeCodec);
+  }
+
+  video2.src = URL.createObjectURL(mediaSource);
+
+  mediaSource.addEventListener("sourceopen", ({ target }) => {
+    URL.revokeObjectURL(video2.src);
+    mediaSource = target;
+    sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
+    console.log("Source buffer created successfully.");
+    video2.play();
+    sourceBuffer.addEventListener("updateend", () => {
+      if (queue.length > 0) {
+        sourceBuffer.appendBuffer(queue.shift());
+      }
+    });
+  });
+  socket.onmessage = async ({ data }) => {
+    let buffer = await data.arrayBuffer();
+    if (sourceBuffer.updating || queue.length > 0) {
+      queue.push(buffer);
+    } else {
+      console.log(data);
+      sourceBuffer.appendBuffer(buffer);
+    }
+  };
 </script>
