@@ -61,12 +61,12 @@ defmodule Rtc.Processor do
     end)
   end
 
-  def process_frame(frame_binary, output_path) do
+  # def process_frame(frame_binary, output_path) do
     # frame_binary
     # |> Mat.from_binary(frame_binary, Cv.Constant.cv_IMPREAD_COLOR())
     # |> detect_and_redraw()
     # |> save_frame(0, output_path)
-  end
+  # end
 
   def process_segment(segment_path, output_path) do
     every = Application.get_env(:rtc, :hls)[:every]

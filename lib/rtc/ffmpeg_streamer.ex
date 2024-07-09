@@ -205,7 +205,6 @@ defmodule Rtc.FFmpegStreamer do
     case :queue.out(state.queue) do
       {{:value, path}, new_queue} ->
         ExCmd.Process.write(state.ffmpeg_pid, File.read!(path))
-        #   Porcelain.Process.send_input(state.porcelain, File.read!(path))
         send(self(), :process_face_queue)
         {:noreply, %{state | queue: new_queue}}
 
@@ -251,7 +250,6 @@ defmodule Rtc.FFmpegStreamer do
   def handle_info(:process_dash_queue, state) do
     case :queue.out(state.queue) do
       {{:value, _data}, new_queue} ->
-        # Porcelain.Process.send_input(state.porcelain, data)
         {:noreply, %{state | dash_queue: new_queue}}
 
       {:empty, _} ->
@@ -269,30 +267,4 @@ defmodule Rtc.FFmpegStreamer do
     # DO SOMETHING ????
     {:noreply, state}
   end
-
-  # def handle_info({:echo, _data, _sender_pid}, state) do
-  #   {:noreply, state}
-  # end
-
-  # def handle_info(:evision, state) do
-  #   IO.puts("EVISION Process------")
-  #   capture = Evision.VideoCapture.videoCapture(0)
-  #   frame = Evision.VideoCapture.read(capture) |> dbg()
-  #   grey = Evision.cvtColor(frame, Evision.Constant.cv_COLOR_BGR2GRAY())
-
-  #   face_cascade_path =
-  #     Path.join(
-  #       Application.get_env(:rtc, :models)[:haar_cascade],
-  #       "haarcascade_frontalface_default.xml"
-  #     )
-
-  #   face_cascade_model = Evision.CascadeClassifier.cascadeClassifier(face_cascade_path)
-  #   faces = Evision.CascadeClassifier.detectMultiScale(face_cascade_model, grey)
-  #   IO.inspect(faces)
-  #   Enum.reduce(faces, frame, fn {x, y, w, h}, mat ->
-  #     Cv.rectangle(mat, {x, y}, {x + w, y + h}, {0, 0, 255}, thickness: 2)
-  #   end)
-
-  #   {:noreply, state}
-  # end
 end

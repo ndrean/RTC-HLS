@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="csrf-token"
+      content="<%= csrf_token %>"
+    />
+    <title>Document</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
+  </head>
+  <body>
+    <div id="elt">
+      <button type="button" id="file-proc">START</button>
+      <br />
+      <button type="button" id="stop">STOP</button>
+      <br />
+      <figure>
+        <video
+          id="source"
+          width="640"
+          height="480"
+          muted
+          autoplay
+          playsinline
+        ></video>
+        <figcaption>Source</figcaption>
+      </figure>
+      <br />
+      <figure>
+        <video
+          id="output"
+          width="640"
+          height="480"
+          muted
+          autoplay
+          playsinline
+          controls
+        ></video>
+        <figcaption>Modified image</figcaption>
+      </figure>
+    </div>
+    <script type="text/javascript" src="js/main.js"> 
+    </script>
+  </body>
+</html>
