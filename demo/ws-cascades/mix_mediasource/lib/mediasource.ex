@@ -35,7 +35,7 @@ end
 
 defmodule FFmpegProcessor do
 	def start(frame_rate, resolution, duration) do
-		frame_pattern =  "priv/input/test_%04d.jpg"
+		frame_pattern =  "priv/input/test_%05d.jpg"
 		build_frames =
 			~w(ffmpeg -loglevel debug -i pipe:0 -framerate #{frame_rate} -video_size #{resolution} -thread_type slice #{frame_pattern})
 		

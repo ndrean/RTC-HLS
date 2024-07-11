@@ -15,7 +15,9 @@ defmodule MixMediasource.MixProject do
   def application do
     [
       mod: {App, []},
-      extra_applications: [:logger, :observer, :wx, :runtime_tools]
+      extra_applications: [:logger]
+      # extra_applications: [:logger, :observer, :wx, :runtime_tools]
+
     ]
   end
 

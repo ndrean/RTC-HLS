@@ -33,6 +33,8 @@ We run a **file watcher process** with `file_system`. It will detect when `FFmpe
 
 ## Run this
 
+cd
+
 ### Mix
 
 From this directory, do:
@@ -55,7 +57,7 @@ It has the same dependencies on `FFmpeg` and file system watcher. We can run a L
 
 ```mermaid
 graph TD
-    F -->|send video chunk| A
+    F -->|mediaRecorder <br>send video chunk| A
     A -- WebSocketHandler.init --> A
     A[WebSocketHandler] -->|ffmpeg_capture: <br>make frames| B[WebSocketHandler]
     B -->|send: process_queue| C[WebSocketHandler]
@@ -72,7 +74,7 @@ When the browser initiates a WebSocket connection, the backend will respond with
 
 ```mermaid
 graph TD
-    A[WebSocketHandler.init] --> B[FileWatcher, self]
+    A[WebSocketHandler.init] --> B[FileWatcher]
     A --> C[FFmpegProcessor]
     C --> D[FFmpeg Capture Process]
     C --> E[FFmpeg Rebuild Process]
