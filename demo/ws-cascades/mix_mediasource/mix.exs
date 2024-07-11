@@ -27,7 +27,8 @@ defmodule MixMediasource.MixProject do
       {:bandit, "~> 1.5"},
       {:websock_adapter, "~> 0.5"},
       {:ex_cmd, "~> 0.12"},
-      {:evision, "~> 0.2"}
+      {:evision, "~> 0.2"},
+      {:file_system, "~> 1.0"},
     ]
   end
 end

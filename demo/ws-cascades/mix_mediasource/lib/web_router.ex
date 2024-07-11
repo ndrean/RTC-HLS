@@ -14,7 +14,7 @@ defmodule WebRouter do
 
 
 	get "/" do
-    Plug.Conn.put_resp_header(conn,"x-frame-options","ALLOW-FROM https://example.com")
+    # Plug.Conn.put_resp_header(conn,"x-frame-options","ALLOW-FROM https://example.com")
 		token = Plug.CSRFProtection.get_csrf_token()
 
 		conn
@@ -29,8 +29,7 @@ defmodule WebRouter do
 	end
 
   get "/hls/:file" do
-		IO.puts "serving hls file---"
-    HomeController.serve_hls(conn, %{"file" => file})
+    HomeController.serve_hls(conn, conn.params)
   end
 	
 	get "/socket" do

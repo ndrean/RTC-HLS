@@ -9,13 +9,11 @@ defmodule HomeController do
 	end
 
   def serve_hls(conn, %{"file" => file}) do
-    dbg(file)
     path = Path.join("priv/hls", file)
     if File.exists?(path) do
       Plug.Conn.send_file(conn, 200, path)
     else
       Plug.Conn.send_resp(conn, 404, "File not found")
     end
-    # Plug.Conn.send_file(conn, 200, Path.join("priv/hls", file))
   end
 end

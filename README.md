@@ -1837,20 +1837,20 @@ sequenceDiagram
 [Playlist construction](https://developer.apple.com/documentation/http-live-streaming/video-on-demand-playlist-construction)
 
 ```txt
-#EXTM3U
-#EXT-X-VERSION:3
-#EXT-X-TARGETDURATION:8
-#EXT-X-MEDIA-SEQUENCE:0
-#EXT-X-PLAYLIST-TYPE:EVENT
-#EXTINF:8.356544,
-segment_000.ts
-#EXTINF:8.356544,
-segment_001.ts
-#EXTINF:8.356544,
-segment_002.ts
-#EXTINF:0.467911,
-segment_003.ts
-#EXT-X-ENDLIST
+  #EXTM3U
+  #EXT-X-VERSION:3
+  #EXT-X-TARGETDURATION:8
+  #EXT-X-MEDIA-SEQUENCE:0
+  #EXT-X-PLAYLIST-TYPE:EVENT
+  #EXTINF:8.356544,
+  segment_000.ts
+  #EXTINF:8.356544,
+  segment_001.ts
+  #EXTINF:8.356544,
+  segment_002.ts
+  #EXTINF:0.467911,
+  segment_003.ts
+  #EXT-X-ENDLIST
 ```
 
 - EXTM3U: this indicates that the file is an extended m3u file. Every HLS playlist must start with this tag.
@@ -1874,7 +1874,7 @@ The process is totally similar to the HLS, except from the FFmpeg command and th
 
 ### Refresher (or not) on Erlang queue
 
-We use 2 times a `:queue`. USed [this source](https://blog.jola.dev/erlang-queue-module-elixir).
+We use 2 times a `:queue`. Used [the doc](https://hexdocs.pm/elixir/1.17.2/erlang-libraries.html#the-queue-module).
 In resume, it is a FIFO, with `:queue.new`, `:queue.in` and `:queue.out`.
 
 <details>
