@@ -1,15 +1,20 @@
-# RTC - Experiments with Elixir
+# WebRTC, HSL, DASH - Experiments with Elixir
 
 <h1 align="center"><b>DRAFT</b></h1>
 <br/>
 
-This is a "basic" `LiveView` app where we experiment processing videos streams with different protocles. We explore the `WebRTC` API, the `ExRTC` (`Elxiir` implementation of WebRTC), HTTP Live Streaming with `HLS` or `DASH` and `MSE` (Media Source Extensions). We want to demonstrate how one can make and broadcast live transformations on images.
+This is a "basic" `LiveView` app where we experiment processing videos streams with different protocoles.
+
+We explore the `WebRTC` API, the `ExRTC` (`Elixir` SFU implementation of WebRTC), HTTP Live Streaming with `HLS` or `DASH` and `MSE` (Media Source Extensions). We want to demonstrate how one can make and broadcast live transformations on images.
 
 Our transformation will be the "Hello World" of computer vision, **face contouring**.
 
-We heavily use `FFmpeg` and the Elixir libraries `ExWebERTC`, `Evision` (`OpenCV` made accessible to `Elixir`), `ExCmd` as the `FFmpeg` runner (on the OS level), and of course `Phoenix LiveView` and `Elixir.Channel`.
+We heavily use `FFmpeg` and the Elixir libraries `ExWebERTC`, `Evision` (port of `OpenCV`), `ExCmd` as the `FFmpeg` runner (on the OS level), and of course `Phoenix LiveView` and `Elixir.Channel`.
 
-> Media Source Extensions is just a player inside the browser. You create a MediaSource object https://developer.mozilla.org/en-US/docs/Web/API/MediaSource and assign it to your video element like this video.src = URL.createObjectURL(mediaSource); Then your javascript code can fetch media segments from somewhere (your server or webserver) and supply to SourceBuffer attached to MediaSource, for playback. WebRTC is not just a player, it is also a capture, encoding and sending mechanism. So it is a player too, and you use it a little differently from Media Source Extensions. Here you create another object: MediaStream object https://developer.mozilla.org/en-US/docs/Web/API/MediaStream and assign it to your video element like this video.srcObject = URL.createObjectURL(mediaStream); Notice that in this case the mediaStream object is not created directly by yourself, but supplied to you by WebRTC APIs such as getUserMedia. So, to summarize, in both cases you use video element to play, but with Media Source Extensions you have to supply media segments by yourself, while with WebRTC you use WebRTC API to supply media. And, once again, with WebRTC you can also capture user's webcam, encode it and send to another browser to play, enabling p2p video chat, for example.
+> **M**edia **S**ource **E**xtensions is a media player inside the browser. You create a [MediaSource object](https://developer.mozilla.org/en-US/docs/Web/API/MediaSource) and assign it to your video element, like `video.src = URL.createObjectURL(mediaSource)`. Your javascript code can fetch media segments from somewhere and supply it to the SourceBuffer attached to MediaSource.
+> `WebRTC` is not just a player, it is also a capture, encoding and sending mechanism. You create another object, a [MediaStream](https://developer.mozilla.org/en-US/docs/Web/API/MediaStream) and assign it to your video element, like `video.srcObject = URL.createObjectURL(mediaStream)`. Notice that in this case the mediaStream object is not created directly by yourself, but supplied to you by WebRTC APIs such as `getUserMedia`.
+
+To summarize, in both cases you use a video element to play, but with MSE you have to supply media segments by yourself, while with WebRTC you use the WebRTC API to supply media. WebRTC can do more: capture a user's webcam, encode it and send to another browser to play, enabling p2p video chat, for example.
 
 Browser to browser video chat testing without WebRTC. How to Use the web socket server to send and receive data in real time.
 
@@ -21,44 +26,38 @@ Browser to browser video chat testing without WebRTC. How to Use the web socket 
 
 > **:hash: What are we building?**
 
-We will use the camera and microphone of the device to exchange media streams.
-We want to use differents protocoles, thus different use cases, to broadcast our feed.
-We also wante to transform our feed with _face contouring_.
+We will use the camera and microphone of the device to exchange media streams. This LiveView based app has "lobby" home page that displays tabs that allow you to use differents protocoles to broadcast our feed.
 
-We demonstrate the usage in the browser with `face-api.js`. We used the basic 200kB model powered by the (unzipped) library `face-api.js` of 600kB.
+- We demonstrate the usage of WebRTC with an Elixir SFU backend: we establish a WebRTC connection between the browser and a ExWebRTC server. Another brower creates his browser/SFU server WebRTC link. Then we forward the flux between the servers. Note that we run a ML recognition process run in the browser using `mediaPipe`. This protocole gives very **low latency**.
 
-> :exclamation: It does not work with Firefox.
+> :exclamation: It works with Chrome and Safari but not work with Firefox because it uses `requestVideoFrameCallback`.
 
-We explore HTTP Live Streaming (HLS). We transform the data on the server for face recognition and rebuild the segments which are available to the viewer.
+You can check this Livebook.
 
-We use the Javascript library "face-api" to track people.
+[![ExWebRTC in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fdwyl%2FWebRTC-SFU-demo%2Fblob%2Fmain%2Flib%2Fecho_mediapipe.livemd)
 
-We explore the WebRTC, using the browser. You can organize a live session, which we limited to 3 participants.
-We explore ExWebRTC, an Elixir implementation. You can organize a live session with two participants.
+- We explore HTTP Live Streaming (HLS). We capture the stream from the browser, send it to the browser (WebSocket binary or HTTP POST). In the server, we transform the data with `Evision` running the Haar Casacade model.You will see that this protocole has **high latency** (15s).
 
-This LiveView based app has "lobby" home page that displays tabs that allow you to:
+[![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fdwyl%2FHLS-demo%2Fblob%2Fmain%2Flib%2Fhls-demo.livemd)
 
-- run a machine learning process from the video stream captured by the browser and pushed through the LiveView socket. With this technology, we cannot stream back a transformed video stream to the client. We can however display back some updates as found by the models.
-- run an Echo ExWebRTC based server. We establish a WebRTC connection between the browser and a ExWebRTC server. This is a mirror: we send back to the browser what he sent back. Since we receive data on the server, we can manipulate it as well.
-- run a peer-to-peer WebRTC conenction via the ExWebRTC server. You choose a room where two clients are connected via ExWebRTC and each will receive the other stream.
-- demonstrate the WebRTC API. You choose a room and up to three clients are connected via WebRTC and each receive the two other streams.
-- demonstrates the HLS and DASH for Live Streaming.
+- This Livebook demonstrates MPEG-DASH. It is very similar to HLS and has the same high latency.
 
-We added a `Presence` process.
+[![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fdwyl%2FDASH-demo%2Fblob%2Fmain%2Flib%2Fdash-demo.livemd)
+
+- We explore the WebRTC, using the browser. It establishes a peer-to-peer connection. This means that once the connection established (this process needs a server to communicate between peers), the browsers communicaque directly via an UPD connection. You can organize for example a live session. We limited it to 3 participants.
 
 **:hash: Quick review of possible technologies, ([cf Wiki page](https://developer.mozilla.org/en-US/docs/Web/Media/Audio_and_video_delivery/Live_streaming_web_audio_and_video)):**
 
 - UPD based techs, for low latency and low quality: [RTP](https://en.wikipedia.org/wiki/Real-time_Transport_Protocol#:~:text=RTP%20typically%20runs%20over%20User,aids%20synchronization%20of%20multiple%20streams.) with [WebRTC](https://en.wikipedia.org/wiki/WebRTC),
 - HTTP based techs: [MPEG-DASH](https://developer.mozilla.org/en-US/docs/Web/Media/Audio_and_video_delivery/Setting_up_adaptive_streaming_media_sources#mpeg-dash_encoding) (playback in the browser with [Dash.js](https://github.com/Dash-Industry-Forum/dash.js/)), and [HLS](https://developer.mozilla.org/en-US/docs/Web/Media/Audio_and_video_delivery/Setting_up_adaptive_streaming_media_sources#hls_encoding) (playback in the browser with [hsl.js](https://github.com/video-dev/hls.js)).
 
-We will focus on:
+## Review of WebRTC
 
-**:hash: WebRTC**
+This technology is about making web apps capable of exchanging media content - audio and video - between browsers _without requiring an intermediary_. It is intended for peer-to-peer delivery within a limited number of browsers, like video conferencing, rather than large-scale broadcasting.
 
-> This technology is about making web apps capable of exchanging media content - audio and video - between browsers _without requiring an intermediary_. It is intended for peer-to-peer delivery within a limited number of browsers, like video conferencing, rather than large-scale broadcasting.
-> It is based on RTP. It uses codecs to compress data. The [WebRTC API](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API) is natively implemented in (almsot every) web navigator.
+It is based on RTP. It uses codecs to compress data. The [WebRTC API](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API) is natively implemented in (almsot every) web navigator.
 
-> We will also use an Elixir implementation - [Elixir WebRTC](https://github.com/elixir-webrtc/ex_webrtc) - of the WebRTC to connect clients (named `ExWebRTC` here). It is a WebRTC gateway on the server.
+We will also use an Elixir implementation - [Elixir WebRTC](https://github.com/elixir-webrtc/ex_webrtc) - of the WebRTC to connect clients (named `ExWebRTC` here). It is a WebRTC gateway on the server.
 
 **:hash: What is signaling?**
 
@@ -98,9 +97,10 @@ When you need to process the streams, such as:
 
 ## The TOC
 
-- [RTC - Experiments with Elixir](#rtc---experiments-with-elixir)
+- [WebRTC, HSL, DASH - Experiments with Elixir](#webrtc-hsl-dash---experiments-with-elixir)
+  - [Review of WebRTC](#review-of-webrtc)
   - [The TOC](#the-toc)
-  - [Broadcast face contouring from the Face API](#broadcast-face-contouring-from-the-face-api)
+  - [Broadcast face contouring with mediaPipe](#broadcast-face-contouring-with-mediapipe)
     - [Push frames to the server](#push-frames-to-the-server)
       - [Push using WebSocket](#push-using-websocket)
       - [Push using HTTP request](#push-using-http-request)
@@ -154,15 +154,13 @@ When you need to process the streams, such as:
 
 <hr/>
 
-## Broadcast face contouring from the Face API
+## Broadcast face contouring with mediaPipe
 
 We have our video feed from our webcam. We want:
 
 - to get frames from this video stream and send them to the server to run some transformations server-side on them,
 - or upload these streams to the server as it is,
-- or add a face contouring layer on top of it with `face-api.js` and send these transformed chunks to the server.
-
-The models can be found [here](https://github.com/justadudewhohacks/face-api.js-models). We used the "ssdmodilenetv1"
+- or add a face contouring layer on top of it with `mediaPipe` and send these transformed chunks to the server.
 
 Once available, you can upload the chunks to the server:
 

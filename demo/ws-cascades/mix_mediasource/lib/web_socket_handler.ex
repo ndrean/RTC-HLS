@@ -17,7 +17,6 @@ defmodule WebSocketHandler do
 
 		{pid_capture, pid_segment} = 
 			FFmpegProcessor.start(@frame_rate, @resolution, @duration)
-			|> dbg()
 
 		state = %{
 			face_detector: ImageProcessor.load_haar_cascade(),

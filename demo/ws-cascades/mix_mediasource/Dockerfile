@@ -1,6 +1,6 @@
 
 
-ARG MIX_ENV="prod"
+ARG MIX_ENV
 FROM hexpm/elixir:1.17.2-erlang-27.0.1-alpine-3.18.7 as build
 
 RUN apk add --no-cache build-base git python3 curl

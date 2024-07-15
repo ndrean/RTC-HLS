@@ -43,9 +43,7 @@ From this directory, do:
 open http://localhost:4000 && mix run --no-halt
 ```
 
-### Docker
-
-Since this uses `FFmpeg` but also `FileSystem` (which depends upon `fsevent` on MacOS and `inotify` on Linux), it may be best to use Docker.
+> this uses `FFmpeg` but also `FileSystem` (which depends upon `fsevent` on MacOS and `inotify` on Linux).
 
 ### A livebook
 
