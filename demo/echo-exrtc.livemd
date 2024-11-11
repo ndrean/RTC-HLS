@@ -10,13 +10,13 @@ Mix.install([
 
 ## SFU: ExWebRTC
 
-The webcam is captured and displayed in a first `<video>` element.
+The webcam is captured and displayed in a first <video> element.
 
 The browser and the Elixir SFU will establish a WebRTC PeerConnection via a signaling channel: the Livebook WebSocket.
 
 They will exchange SDP and ICE candidates.
 
-Once connected, the Elixir SFU will receive the streams from the `<video 1>` via a UDP connection. In this Echo configuration, it will send back the streams to the connected peer via UDP and display them in the other `<video 2>` element.
+Once connected, the Elixir SFU will receive the streams from the <video 1> via a UDP connection. In this Echo configuration, it will send back the streams to the connected peer via UDP and display them in the other <video 2> element.
 
 <!-- livebook:{"break_markdown":true} -->
 
@@ -73,7 +73,7 @@ defmodule RtcServer do
     ffmpeg = "/opt/homebrew/Cellar/ffmpeg/7.0-with-options_1/bin/ffmpeg"
     #ffmpeg_cmd = ~w(#{ffmpeg} -i pipe:0 -f vpx -c:v copy -f webm pipe:1 )
     ffmpeg_cmd =  ~w(#{ffmpeg} -i pipe:0 -f rawvideo -vcodec vp8 -f ifv -y demo/output.ivf)
-      
+
     {:ok, pid} = ExCmd.Process.start_link(ffmpeg_cmd, log: true)
     pid
   end
@@ -112,7 +112,7 @@ defmodule RtcServer do
   end
 
   def handle_call(:connect, _, state) do
-    {:ok, pc_pid} = 
+    {:ok, pc_pid} =
       PeerConnection.start_link(ice_servers: ice_servers(), video_codecs: video_codecs())
 
     state = %{state | pc: pc_pid} |> Map.merge(setup_transceivers(pc_pid))
@@ -186,12 +186,12 @@ defmodule RtcServer do
     #[codec, _] =
     #  Regex.scan(~r/a=rtpmap:([a-zA-Z0-9\s]+)/, sdp)
 
-    PeerConnection.get_transceivers(pc) 
-    |> Enum.find(&(&1.kind == :video)) 
-    |> then(fn %{receiver: receiver} -> 
+    PeerConnection.get_transceivers(pc)
+    |> Enum.find(&(&1.kind == :video))
+    |> then(fn %{receiver: receiver} ->
       Logger.warning("PeerConnection successfully connected, using #{inspect(receiver.codec.mime_type)}")
       end)
-    
+
     {:noreply, state}
   end
 
@@ -212,13 +212,13 @@ defmodule RtcServer do
           q = 30
           if (Integer.mod(n, q) == 0) do
             Logger.debug(%{
-              size: Float.round(byte_size(frame)*8/1000,1), 
+              size: Float.round(byte_size(frame)*8/1000,1),
               fps: round(q* 1_000_000/(t-state.t))
             })
 
             :ok = ExCmd.Process.write(state.ffmpeg_pid, frame)
-            
-              
+
+
             %{state | video_depayloader: d, i: n, t: t}
           else
             %{ state | video_depayloader: d, i: n}
@@ -260,7 +260,7 @@ RtcServer.peek_state()
 
 On connection, a new `PeerConnection` is created. Since the server is already connected, the client will send an "offer" via the signaling channel. The client expects an "answer" back. It will also send "Ice" candidates via the signaling channel, and expects to receive Ice candidates from the server.
 
-Once the connection is set, the client will receive RTP packets and digest them into a `<video>` element.
+Once the connection is set, the client will receive RTP packets and digest them into a <video> element.
 
 ```elixir
 defmodule VideoLive do
